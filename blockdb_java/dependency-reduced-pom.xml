@@ -3,7 +3,7 @@
   <modelVersion>4.0.0</modelVersion>
   <groupId>iiis.systems.os</groupId>
   <artifactId>blockdb</artifactId>
-  <version>1.0-SNAPSHOT</version>
+  <version>1.0</version>
   <build>
     <extensions>
       <extension>

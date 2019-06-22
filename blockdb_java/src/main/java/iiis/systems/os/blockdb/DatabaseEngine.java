@@ -34,9 +34,9 @@ public class DatabaseEngine {
     
     protected class branch implements Comparable<branch> {
     	private int length;
-    	private String last_block;
+    	private JsonObject last_block;
         
-    	public branch(int _length, String _last_block) {
+    	public branch(int _length, JsonObject _last_block) {
     		this.length = _length;
     		this.last_block = _last_block;
     	}
@@ -49,7 +49,7 @@ public class DatabaseEngine {
 
     private HashMap<String, Integer> balances = new HashMap<>();
     private HashMap<String, Lock> locks = new HashMap<>();
-    private HashMap<Integer, String> blocks = new HashMap<>();
+    private HashMap<String, JsonObject> blocks = new HashMap<>();
     private PriorityQueue<branch> BlockChain = new PriorityQueue<branch>();
     private int minerId;
     private int logLength = 0;
@@ -98,7 +98,7 @@ public class DatabaseEngine {
     public void output_block() {
     	JsonObject block = new JsonObject();
     	block.addProperty("BlockID", blockId);
-    	block.addProperty("PrevHash", Hash.getHashString(getLongestBranch().last_block));
+    	block.addProperty("PrevHash", Hash.getHashString(getLongestBranch().last_block.toString()));
     	block.addProperty("Nonce", "00000000");
     	block.addProperty("MinerID", "Server"+String.format("%02d", minerId));
     	
@@ -134,7 +134,7 @@ public class DatabaseEngine {
         } catch(IOException e){
         //e.printStackTrace();
         System.out.println("Fail to write block: " + dataDir + Integer.toString(blockId) + ".json");
-}
+        }
     }
 
     public int get(String userId) {
@@ -166,16 +166,73 @@ public class DatabaseEngine {
         return true;
     }
 
-    public responseContainer verify(){
-        return new responseContainer();
+    public boolean find_UUID(JsonArray transactions, String UUID) {
+    	int N = transactions.size();
+    	boolean found = false;
+    	for(int i=0; i<N; i++) {
+			JsonObject Tx = transactions.get(i).getAsJsonObject();
+			String uuid = Tx.get("UUID").getAsString();
+			if (uuid.contentEquals(UUID))
+				found = true;
+		}
+        return found;
+    }
+    
+    public responseContainer verify(String UUID){
+    	JsonObject current_block = BlockChain.peek().last_block;
+    	String current_hash = Hash.getHashString(current_block.toString());
+    	String first_hash = "0000000000000000000000000000000000000000000000000000000000000000";
+    	int depth = 0;
+    	boolean found_in_BlockChain = false, found_in_TxPool = false;
+    	
+    	//try to find the transaction on the longest chain
+    	while (true) {
+    		JsonArray transactions = current_block.getAsJsonArray("Transactions");
+    		found_in_BlockChain = find_UUID(transactions, UUID);
+    		
+    		if(found_in_BlockChain)
+    			break;
+    		
+    		String prev_hash = current_block.get("PrevHash").getAsString();
+    		if(prev_hash.contentEquals(first_hash))
+    			break;
+    		
+    		current_block = blocks.get(prev_hash);
+    		current_hash = Hash.getHashString(current_block.toString());
+    		depth++;
+    	}
+    	
+    	//try to find the transaction in the TxPool
+		found_in_TxPool = find_UUID(TxPool, UUID);
+    	
+    	responseContainer response = new responseContainer();
+    	if (found_in_BlockChain && depth >= 6) {
+    		response.verify_result = 0;
+    		response.block = current_block.toString();
+    	}
+    	else if (found_in_BlockChain || found_in_TxPool) {
+    		response.verify_result = 1;
+    		if (found_in_BlockChain)
+    			response.block = current_block.toString();
+    	}
+    	else
+    		response.verify_result = 2;
+    	
+        return response;
     }
 
     public responseContainer getHeight(){
-        return new responseContainer();
+        branch leaf = BlockChain.peek();
+    	responseContainer response = new responseContainer();
+    	response.result = leaf.length;
+    	response.block = leaf.last_block.toString();
+        return response;
     }
 
-    public String getBlock(){
-        return "";
+    public String getBlock(String hash){
+    	String response = null;
+    	response = blocks.get(hash).toString();
+    	return response;
     }
 
     public void pushBlock(){
@@ -188,21 +245,27 @@ public class DatabaseEngine {
 
     public class responseContainer{
         private int result = 0;
-        String hash = "";
+        private String block = "";
+        private int verify_result = 0;
         responseContainer(){
         }
         
-        responseContainer(int result, String hash){
+        responseContainer(int result, String block, int verify_result){
             this.result = result;
-            this.hash = hash;
+            this.block = block;
+            this.verify_result = verify_result;
         }
 
         public int getResult(){
             return this.result;
         }
 
-        public String getHash(){
-            return this.hash;
+        public String getBlock(){
+            return this.block;
+        }
+        
+        public int getVerifyResult() {
+        	return this.verify_result;
         }
     }
 

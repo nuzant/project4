@@ -11,7 +11,5 @@ public class Util {
         String content = new String(Files.readAllBytes(Paths.get(filePath)));
         return new JSONObject(content);
     }
-
-    //data structure contains verify response in engine
-
 }
+

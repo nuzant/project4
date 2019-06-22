@@ -12,6 +12,7 @@
 /home/nuz/workspace/os/project/project4/blockdb_java/src/main/java/iiis/systems/os/blockdb/BlockDatabaseServer.java
 /home/nuz/workspace/os/project/project4/blockdb_java/target/generated-sources/protobuf/java/iiis/systems/os/blockdb/GetRequestOrBuilder.java
 /home/nuz/workspace/os/project/project4/blockdb_java/target/generated-sources/protobuf/java/iiis/systems/os/blockdb/GetHeightResponse.java
+/home/nuz/workspace/os/project/project4/blockdb_java/src/main/java/iiis/systems/os/blockdb/BlockDatabaseClient.java
 /home/nuz/workspace/os/project/project4/blockdb_java/target/generated-sources/protobuf/java/iiis/systems/os/blockdb/NullOrBuilder.java
 /home/nuz/workspace/os/project/project4/blockdb_java/target/generated-sources/protobuf/java/iiis/systems/os/blockdb/BooleanResponseOrBuilder.java
 /home/nuz/workspace/os/project/project4/blockdb_java/target/generated-sources/protobuf/java/iiis/systems/os/blockdb/VerifyResponseOrBuilder.java
@@ -19,6 +20,7 @@
 /home/nuz/workspace/os/project/project4/blockdb_java/target/generated-sources/protobuf/java/iiis/systems/os/blockdb/GetBlockRequestOrBuilder.java
 /home/nuz/workspace/os/project/project4/blockdb_java/target/generated-sources/protobuf/java/iiis/systems/os/blockdb/GetResponse.java
 /home/nuz/workspace/os/project/project4/blockdb_java/src/main/java/iiis/systems/os/blockdb/DatabaseEngine.java
+/home/nuz/workspace/os/project/project4/blockdb_java/src/main/java/iiis/systems/os/blockdb/ServerInfo.java
 /home/nuz/workspace/os/project/project4/blockdb_java/target/generated-sources/protobuf/java/iiis/systems/os/blockdb/GetRequest.java
 /home/nuz/workspace/os/project/project4/blockdb_java/src/main/java/iiis/systems/os/blockdb/hash/Hash.java
 /home/nuz/workspace/os/project/project4/blockdb_java/target/generated-sources/protobuf/java/iiis/systems/os/blockdb/GetResponseOrBuilder.java
