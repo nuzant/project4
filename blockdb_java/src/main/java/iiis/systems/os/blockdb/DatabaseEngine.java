@@ -1,6 +1,5 @@
 package iiis.systems.os.blockdb;
 
-//aaaaa
 import java.io.FileWriter;
 import java.io.File;
 import java.io.FileReader;
@@ -57,6 +56,7 @@ public class DatabaseEngine {
     private int blockId = 1;
     private JsonArray TxPool = new JsonArray();
     private File logFile = new File(dataDir + "log.json");
+    public boolean stopComputing = true;
     //private FileWriter logWriter;
 
     DatabaseEngine(String dataDir) {
@@ -269,4 +269,48 @@ public class DatabaseEngine {
         }
     }
 
+
+    /*
+    This method will compute one satisfiable nonce, which is a 8-digit String
+    for the block, and fill the "nonce" field with the nonce.
+    Return nothing. If not a single nonce has been solved by the function,
+    it will throw an exception.
+    */
+    public byte intToByte(int i){ // i < 128 here
+		return (byte)(i & 0xff);
+	}
+
+    public String compute_nonce(JsonObject block){
+        String nonce = new String();
+        
+        //compute
+        block = (JsonObject)block.remove("nonce");
+        for(int i1 = 0; i1 < 128; i1++){
+            for(int i2 = 0; i2 < 128; i2++){
+                for(int i3 = 0; i3 < 128; i3++){
+                    for(int i4 = 0; i4 < 128; i4++){
+                        for(int i5 = 0; i5 < 128; i5++){
+                            for(int i6 = 0; i6 < 128; i6++){
+                                for(int i7 = 0; i7 < 128; i7++){
+                                    for(int i8 = 0; i8 < 128; i8++){
+                                        byte[] nonceByte = {intToByte(i1), intToByte(i2), intToByte(i3), intToByte(i4),
+                                                                intToByte(i5), intToByte(i6), intToByte(i7), intToByte(i8)};
+                                        nonce = new String(nonceByte);
+                                        block.addProperty("nonce", nonce);
+                                        if(Hash.checkHash(Hash.getHashString(block.toString()))){
+                                            return nonce;
+                                        }
+                                        if(stopComputing){
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return nonce;
+    }
 }
