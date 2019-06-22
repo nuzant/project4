@@ -281,10 +281,9 @@ public class DatabaseEngine {
 	}
 
     public String compute_nonce(JsonObject block){
-        String nonce = new String();
-        
         //compute
         block = (JsonObject)block.remove("nonce");
+        jumpOut:
         for(int i1 = 0; i1 < 128; i1++){
             for(int i2 = 0; i2 < 128; i2++){
                 for(int i3 = 0; i3 < 128; i3++){
@@ -295,13 +294,12 @@ public class DatabaseEngine {
                                     for(int i8 = 0; i8 < 128; i8++){
                                         byte[] nonceByte = {intToByte(i1), intToByte(i2), intToByte(i3), intToByte(i4),
                                                                 intToByte(i5), intToByte(i6), intToByte(i7), intToByte(i8)};
-                                        nonce = new String(nonceByte);
-                                        block.addProperty("nonce", nonce);
+                                        block.addProperty("nonce",  new String(nonceByte));
                                         if(Hash.checkHash(Hash.getHashString(block.toString()))){
-                                            return nonce;
+                                            return new String(nonceByte);
                                         }
                                         if(stopComputing){
-                                            break;
+                                            break jumpOut;
                                         }
                                     }
                                 }
@@ -311,6 +309,7 @@ public class DatabaseEngine {
                 }
             }
         }
-        return nonce;
+        System.out.println("compute_nonce(): Stop computing blocks because received available block, return empty string.");
+        return new String();
     }
 }
