@@ -78,8 +78,14 @@ public class BlockDatabaseServer {
         @Override
         public void verify(Transaction request, StreamObserver<VerifyResponse> responseObserver) {
             //Results result = dbEngine.verify().getResult();
-            String blockhash = dbEngine.verify().getHash();
-            VerifyResponse response = VerifyResponse.newBuilder().setResult(VerifyResponse.Results.FAILED).setBlockHash(blockhash).build();
+        	DatabaseEngine.responseContainer r = dbEngine.verify(request.getUUID());
+        	VerifyResponse.Results results = VerifyResponse.Results.FAILED;
+        	switch(r.getVerifyResult()) {
+        	case 0: results = VerifyResponse.Results.SUCCEEDED;break;
+        	case 1: results = VerifyResponse.Results.PENDING;break;
+        	case 2: results = VerifyResponse.Results.FAILED;break;
+        	}
+            VerifyResponse response = VerifyResponse.newBuilder().setResult(results).setBlockHash(r.getBlock()).build();
             responseObserver.onNext(response);
             responseObserver.onCompleted();
         }
@@ -87,15 +93,15 @@ public class BlockDatabaseServer {
         @Override
         public void getHeight(Null request, StreamObserver<GetHeightResponse> responseObserver){
             int result = dbEngine.getHeight().getResult();
-            String leafhash = dbEngine.getHeight().getHash();
-            GetHeightResponse response = GetHeightResponse.newBuilder().setHeight(result).setLeafHash(leafhash).build();
+            DatabaseEngine.responseContainer r = dbEngine.getHeight();
+            GetHeightResponse response = GetHeightResponse.newBuilder().setHeight(r.getResult()).setLeafHash(r.getBlock()).build();
             responseObserver.onNext(response);
             responseObserver.onCompleted();
         }
 
         @Override
         public void getBlock(GetBlockRequest request, StreamObserver<JsonBlockString> responseObserver){
-            String json = dbEngine.getBlock();
+            String json = dbEngine.getBlock(request.getBlockHash());
             JsonBlockString response = JsonBlockString.newBuilder().setJson(json).build();
             responseObserver.onNext(response);
             responseObserver.onCompleted();

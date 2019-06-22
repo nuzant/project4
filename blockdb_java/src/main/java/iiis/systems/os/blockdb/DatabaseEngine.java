@@ -222,11 +222,17 @@ public class DatabaseEngine {
     }
 
     public responseContainer getHeight(){
-        return new responseContainer();
+        branch leaf = BlockChain.peek();
+    	responseContainer response = new responseContainer();
+    	response.result = leaf.length;
+    	response.block = leaf.last_block.toString();
+        return response;
     }
 
-    public String getBlock(){
-        return "";
+    public String getBlock(String hash){
+    	String response = null;
+    	response = blocks.get(hash).toString();
+    	return response;
     }
 
     public void pushBlock(){
