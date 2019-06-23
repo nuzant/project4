@@ -14,6 +14,7 @@ import java.util.HashSet;
 public class BlockDatabaseServer {
     private Server server;
     private static Set<BlockDatabaseClient> clients = new HashSet<BlockDatabaseClient>();
+    private static Computer computer;
 
     private void start(String address, int port) throws IOException {
         server = NettyServerBuilder.forAddress(new InetSocketAddress(address, port))
@@ -98,6 +99,7 @@ public class BlockDatabaseServer {
         //start server (thread?)
         DatabaseEngine.setup(myInfo.dataDir);
 
+        DatabaseEngine dbEngine = DatabaseEngine.getInstance();
         final BlockDatabaseServer server = new BlockDatabaseServer();
         server.start(myInfo.host, myInfo.port);
 
@@ -112,7 +114,16 @@ public class BlockDatabaseServer {
             client.start();
         }
 
-        server.blockUntilShutdown();
+        //start computer
+        computer = new Computer(dbEngine);
+        computer.start();
+
+        while(true){
+            //server running logic
+        }
+
+
+        //server.blockUntilShutdown();
     }
 
     static class BlockDatabaseImpl extends BlockDatabaseGrpc.BlockDatabaseImplBase {
@@ -138,6 +149,9 @@ public class BlockDatabaseServer {
                 counter ++;
             }
             if(counter < 1) success = false;
+            if(success){
+                dbEngine.addTx(request.getFromID(), request.getToID(), request.getValue(), request.getMiningFee(), request.getUUID());
+            }
             BooleanResponse response = BooleanResponse.newBuilder().setSuccess(success).build();
             responseObserver.onNext(response);
             responseObserver.onCompleted();

@@ -82,7 +82,7 @@ public class DatabaseEngine {
     	return BlockChain.peek();
     }
     
-    public void AddTx(String fromId, String toId, int value, int miningFee, String UUID) {
+    public void addTx(String fromId, String toId, int value, int miningFee, String UUID) {
     	JsonObject Tx = new JsonObject();
     	
     	Tx.addProperty("Type", "TRANSFER");
@@ -112,7 +112,7 @@ public class DatabaseEngine {
     		newTxPool.add(TxPool.get(i));
     	block.add("Transactions", transactions);
     	
-    	 //create blockfile 
+    	//create blockfile 
         File createBlockFile = new File(dataDir + Integer.toString(blockId) + ".json");
         createBlockFile.delete();
         if(!createBlockFile.exists()){
@@ -161,8 +161,6 @@ public class DatabaseEngine {
         balances.put(toId, toBalance + value);
         locks.get(toId).unlock();
         locks.get(fromId).unlock();
-        //output_log(4, fromId, toId, value);
-        //check_output();
         return true;
     }
 
@@ -296,6 +294,7 @@ public class DatabaseEngine {
                                                                 intToByte(i5), intToByte(i6), intToByte(i7), intToByte(i8)};
                                         block.addProperty("nonce",  new String(nonceByte));
                                         if(Hash.checkHash(Hash.getHashString(block.toString()))){
+                                            System.out.println("compute_nonce(): Compute completed.");
                                             return new String(nonceByte);
                                         }
                                         if(stopComputing){
