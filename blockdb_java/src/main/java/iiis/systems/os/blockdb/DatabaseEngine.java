@@ -11,6 +11,7 @@ import java.util.HashMap;
 import java.util.PriorityQueue;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.Stack;
 
 import com.google.gson.JsonObject;
 import com.google.gson.JsonArray;
@@ -47,6 +48,7 @@ public class DatabaseEngine {
     }
 
     private HashMap<String, Integer> balances = new HashMap<>();
+    private HashMap<String, Integer> balances_block = new HashMap<>();
     private HashMap<String, Lock> locks = new HashMap<>();
     private HashMap<String, JsonObject> blocks = new HashMap<>();
     private PriorityQueue<branch> BlockChain = new PriorityQueue<branch>();
@@ -63,9 +65,9 @@ public class DatabaseEngine {
         this.dataDir = dataDir;
     }
 
-    private int getOrInit(String userId) {
-        if (balances.containsKey(userId)) {
-            return balances.get(userId);
+    private int getOrInit(String userId, HashMap<String, Integer> balance) {
+        if (balance.containsKey(userId)) {
+            return balance.get(userId);
         } else {
             return 1000;
         }
@@ -82,7 +84,7 @@ public class DatabaseEngine {
     	return BlockChain.peek();
     }
     
-    public void addTx(String fromId, String toId, int value, int miningFee, String UUID) {
+    public void AddTx(String fromId, String toId, int value, int miningFee, String UUID) {
     	JsonObject Tx = new JsonObject();
     	
     	Tx.addProperty("Type", "TRANSFER");
@@ -95,7 +97,7 @@ public class DatabaseEngine {
     	TxPool.add(Tx);
     }
     
-    public void output_block() {
+    public JsonObject compute_block() {
     	JsonObject block = new JsonObject();
     	block.addProperty("BlockID", blockId);
     	block.addProperty("PrevHash", Hash.getHashString(getLongestBranch().last_block.toString()));
@@ -112,7 +114,13 @@ public class DatabaseEngine {
     		newTxPool.add(TxPool.get(i));
     	block.add("Transactions", transactions);
     	
-    	//create blockfile 
+    	String nonce = compute_nonce(block);
+    	block.addProperty("Nonce", nonce);
+    	return block;
+    }
+    
+    public void output_block(JsonObject block) {
+    	 //create blockfile 
         File createBlockFile = new File(dataDir + Integer.toString(blockId) + ".json");
         createBlockFile.delete();
         if(!createBlockFile.exists()){
@@ -141,27 +149,28 @@ public class DatabaseEngine {
         //createLock(userId);
         //logLength++;
         //check_output();
-        return getOrInit(userId);
+        return getOrInit(userId, balances);
     }
 
-    public boolean transfer(String fromId, String toId, int value, int miningFee, String UUID) {
-        createLock(fromId);
-        createLock(toId);
-        locks.get(fromId).lock();
-        locks.get(toId).lock();
-        int fromBalance = getOrInit(fromId);
-        int toBalance = getOrInit(toId);
+    public boolean transfer_balance(String fromId, String toId, int value, int miningFee, String UUID, HashMap<String, Integer> balance) {
+        int fromBalance = getOrInit(fromId, balance);
+        int toBalance = getOrInit(toId, balance);
         if(fromBalance - value < 0){
             locks.get(fromId).unlock();
             locks.get(toId).unlock();
             return false;
         }
-        logLength++;
-        balances.put(fromId, fromBalance - value);
-        balances.put(toId, toBalance + value);
-        locks.get(toId).unlock();
-        locks.get(fromId).unlock();
+        
+        balance.put(fromId, fromBalance - value);
+        balance.put(toId, toBalance + value);
+
+        //output_log(4, fromId, toId, value);
+        //check_output();
         return true;
+    }
+    
+    public boolean transfer(String fromId, String toId, int value, int miningFee, String UUID) {
+    	return transfer_balance(fromId, toId, value, miningFee, UUID, balances);
     }
 
     public boolean find_UUID(JsonArray transactions, String UUID) {
@@ -232,12 +241,123 @@ public class DatabaseEngine {
     	response = blocks.get(hash).toString();
     	return response;
     }
+    
+    public HashMap<String, Integer> compute_balance(JsonObject block) {
+    	HashMap<String, Integer> balance = new HashMap<>();
+    	Stack<JsonObject> s = new Stack<JsonObject>();
+    	String initHash = "0000000000000000000000000000000000000000000000000000000000000000";
+    	String prevHash = block.get("PrevHash").getAsString();
+    	s.push(block);
+    	
+    	while (prevHash.equals(initHash)) {
+    		JsonObject now = blocks.get(prevHash);
+    		s.push(now);
+    		prevHash = now.get("PrevHash").getAsString();
+    	}
+    	
+    	while(s.empty()) {
+    		JsonObject now = s.pop();
+    		Update_by_block(balance, now);
+    	}
+    	
+    	return balance;
+    }
+    
+    public boolean Update_by_block(HashMap<String, Integer> balance, JsonObject block) {
+    	JsonArray transactions = block.get("Transactions").getAsJsonArray();
+		int N = transactions.size();
+		
+		for(int i=0;i<N;i++) {
+			JsonObject Tx = transactions.get(i).getAsJsonObject();
+			String fromId = Tx.get("FromID").getAsString();
+			String toId = Tx.get("ToID").getAsString();
+			int value = Tx.get("Value").getAsInt();
+			int miningFee = Tx.get("MiningFee").getAsInt();
+			String UUID = Tx.get("UUID").getAsString();
+			if (!transfer_balance(fromId, toId, value, miningFee, UUID, balance))
+				return false;
+		}
+    	
+    	return true;
+    }
 
-    public void pushBlock(){
+    public JsonObject CheckBlock(JsonObject block) {
+    	boolean check1 = true;
+    	//check if the block’s string hash is legitimate
+    	
+    	//check if the block’s hash to its previous block is indeed a block on the longest branch
+    	JsonObject block_chosen = null;
+    	boolean check2 = false;
+    	PriorityQueue<branch> newBlockChain = new PriorityQueue<branch>();
+    	String prevHash = block.get("PrevHash").getAsString();
+    	int length = BlockChain.peek().length;
+    	while (!BlockChain.isEmpty()) {
+    		branch now = BlockChain.peek();
+    		String hash = Hash.getHashString(now.last_block.toString());
+    		if (prevHash.contentEquals(hash) && now.length == length && !check2) {
+    			check2 = true;
+    			block_chosen = now.last_block;
+    		}
+    		BlockChain.remove();
+    		newBlockChain.add(now);
+    	}
+    	BlockChain = newBlockChain;
+    	
+    	//check if the block’s transactions are new transactions
+    	boolean check3 = true;
+    	JsonArray transactions = block.get("Transactions").getAsJsonArray();
+    	int N = transactions.size();
+    	for (int i=0; i<N; i++) {
+    		JsonObject Tx = transactions.get(i).getAsJsonObject();
+    		if (!TxPool.contains(Tx))
+    			check3 = false;
+    	}
+    	
+    	//check if the block’s transactions are all legitimate
+    	boolean check4 = true;
+    	if (check2) {
+    	    HashMap<String, Integer> balance = compute_balance(block_chosen);
+    	    if (!Update_by_block(balance, block))
+    	    	check4 = false;
+    	}
+    	
+    	if (check1 && check2 && check3 && check4)
+            return block_chosen;
+    	else
+    		return null;
+    }
+    
+    public void PutBlock(JsonObject block, JsonObject block_chosen) {
+    	PriorityQueue<branch> newBlockChain = new PriorityQueue<branch>();
+    	while (BlockChain.isEmpty()) {
+    		branch now = BlockChain.peek();
+    		if (now.last_block.equals(block_chosen))
+    			newBlockChain.add(new branch(now.length+1, block));
+    		else
+    			newBlockChain.add(now);
+    	}
+    	BlockChain = newBlockChain;
+    }
+    
+    public void pushBlock(String block){
+    	JsonParser parser = new JsonParser();
+    	JsonObject Block = (JsonObject) parser.parse(block);
+    	JsonObject block_chosen = CheckBlock(Block);
+    	if (block_chosen != null) {
+    		PutBlock(Block, block_chosen);
+    		Update_by_block(balances_block, Block);
+    	}
         return;
     }
 
-    public void pushTransaction(){
+    public void pushTransaction(String fromId, String toId, int value, int miningFee, String UUID){
+    	int fromBalance = getOrInit(fromId, balances);
+    	int toBalance = getOrInit(toId, balances);
+    	if (value > miningFee && fromBalance > value) {
+    		AddTx(fromId, toId, value, miningFee, UUID);
+    		balances.put(fromId, fromBalance - value);
+            balances.put(toId, toBalance + value);
+    	}
         return;
     }
 
@@ -266,8 +386,6 @@ public class DatabaseEngine {
         	return this.verify_result;
         }
     }
-
-
     /*
     This method will compute one satisfiable nonce, which is a 8-digit String
     for the block, and fill the "nonce" field with the nonce.

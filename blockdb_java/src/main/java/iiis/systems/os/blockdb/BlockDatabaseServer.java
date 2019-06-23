@@ -148,10 +148,6 @@ public class BlockDatabaseServer {
                 }
                 counter ++;
             }
-            if(counter < 1) success = false;
-            if(success){
-                dbEngine.addTx(request.getFromID(), request.getToID(), request.getValue(), request.getMiningFee(), request.getUUID());
-            }
             BooleanResponse response = BooleanResponse.newBuilder().setSuccess(success).build();
             responseObserver.onNext(response);
             responseObserver.onCompleted();
@@ -191,7 +187,7 @@ public class BlockDatabaseServer {
 
         @Override
         public void pushBlock(JsonBlockString request, StreamObserver<Null> responseObserver){
-            dbEngine.pushBlock();
+            dbEngine.pushBlock(request.getJson());
             Null response = Null.newBuilder().build();
             responseObserver.onNext(response);
             responseObserver.onCompleted();
@@ -199,7 +195,7 @@ public class BlockDatabaseServer {
 
         @Override
         public void pushTransaction(Transaction request, StreamObserver<Null> responseObserver){
-            dbEngine.pushTransaction();
+            dbEngine.pushTransaction(request.getFromID(), request.getToID(), request.getValue(), request.getMiningFee(), request.getUUID());
             Null response = Null.newBuilder().build();
             responseObserver.onNext(response);
             responseObserver.onCompleted();
