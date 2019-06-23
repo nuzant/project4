@@ -11,6 +11,8 @@ public class Computer extends Thread{
 
     private JsonObject block; 
 
+    public boolean finished = false;
+
     Computer(DatabaseEngine dbEngine){
         this.dbEngine = dbEngine;
     }
@@ -20,14 +22,19 @@ public class Computer extends Thread{
             try{
                 synchronized(this){
                     this.wait();
-                    dbEngine.compute_nonce(block);
                 }
             } catch(InterruptedException e) {
                 //i dont actually know in what situation this can happen
                 System.err.println("Computer thread interrupted.");
                 Thread.currentThread().interrupt();
             }
+            block = dbEngine.compute_nonce(block);
+            this.finished = false;
         }
+    }
+
+    public void setFinished(boolean b){
+        this.finished = b;
     }
 
     public void start(){
@@ -40,6 +47,11 @@ public class Computer extends Thread{
 
     public void setBlock(JsonObject block){
         this.block = block;
+        dbEngine.setComputing(true);
+    }
+
+    public String getBlock(){
+        return this.block.toString();
     }
 
     public String getResult(){

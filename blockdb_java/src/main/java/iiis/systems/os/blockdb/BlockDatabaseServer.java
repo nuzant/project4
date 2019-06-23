@@ -6,6 +6,8 @@ import io.grpc.stub.StreamObserver;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import com.google.gson.JsonObject;
+
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.util.Set;
@@ -15,6 +17,7 @@ public class BlockDatabaseServer {
     private Server server;
     private static Set<BlockDatabaseClient> clients = new HashSet<BlockDatabaseClient>();
     private static Computer computer;
+    private static DatabaseEngine dbEngine;
 
     private void start(String address, int port) throws IOException {
         server = NettyServerBuilder.forAddress(new InetSocketAddress(address, port))
@@ -98,8 +101,8 @@ public class BlockDatabaseServer {
         initialize(args);
         //start server (thread?)
         DatabaseEngine.setup(myInfo.dataDir);
-
-        DatabaseEngine dbEngine = DatabaseEngine.getInstance();
+        dbEngine = DatabaseEngine.getInstance();
+        
         final BlockDatabaseServer server = new BlockDatabaseServer();
         server.start(myInfo.host, myInfo.port);
 
@@ -120,6 +123,22 @@ public class BlockDatabaseServer {
 
         while(true){
             //server running logic
+            if(!dbEngine.newBlock && dbEngine.getTransSize() > 0 && !dbEngine.computing){
+                computer.setBlock(dbEngine.raw_block());
+                synchronized(computer){
+                    computer.notify();
+                }
+            }
+
+            if(computer.finished){
+                String newblock = computer.getBlock();
+                for(BlockDatabaseClient client: clients){
+                    client.setBlock(newblock);
+                    synchronized(client){
+                        client.notify();
+                    }
+                }
+            }
         }
 
 

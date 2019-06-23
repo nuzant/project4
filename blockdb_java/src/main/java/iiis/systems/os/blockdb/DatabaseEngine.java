@@ -58,11 +58,69 @@ public class DatabaseEngine {
     private int blockId = 1;
     private JsonArray TxPool = new JsonArray();
     private File logFile = new File(dataDir + "log.json");
-    public boolean stopComputing = true;
-    //private FileWriter logWriter;
+    public boolean computing = false;
+    public boolean newBlock = false;
 
     DatabaseEngine(String dataDir) {
         this.dataDir = dataDir;
+    }
+
+    //rpc calls 
+
+    public int get(String userId) {
+        return getOrInit(userId, balances);
+    }
+
+    public boolean transfer(String fromId, String toId, int value, int miningFee, String UUID) {
+    	return transfer_balance(fromId, toId, value, miningFee, UUID, balances);
+    }
+
+    public responseContainer getHeight(){
+        branch leaf = BlockChain.peek();
+    	responseContainer response = new responseContainer();
+    	response.result = leaf.length;
+    	response.block = leaf.last_block.toString();
+        return response;
+    }
+
+    public String getBlock(String hash){
+    	String response = null;
+    	response = blocks.get(hash).toString();
+    	return response;
+    }
+
+    public void pushBlock(String block){
+    	JsonParser parser = new JsonParser();
+    	JsonObject Block = (JsonObject) parser.parse(block);
+    	JsonObject block_chosen = CheckBlock(Block);
+    	if (block_chosen != null) {
+    		PutBlock(Block, block_chosen);
+    		Update_by_block(balances_block, Block);
+        }
+        newBlock = true;
+        return;
+    }
+
+    public void pushTransaction(String fromId, String toId, int value, int miningFee, String UUID){
+    	int fromBalance = getOrInit(fromId, balances);
+    	int toBalance = getOrInit(toId, balances);
+    	if (value > miningFee && fromBalance > value) {
+    		AddTx(fromId, toId, value, miningFee, UUID);
+    		balances.put(fromId, fromBalance - value);
+            balances.put(toId, toBalance + value);
+    	}
+        return;
+    }
+
+    //rpc calls end
+    //util functions
+
+    public void setComputing(boolean b){
+        this.computing = b;
+    }
+
+    public int getTransSize(){
+        return TxPool.size();    
     }
 
     private int getOrInit(String userId, HashMap<String, Integer> balance) {
@@ -97,13 +155,14 @@ public class DatabaseEngine {
     	TxPool.add(Tx);
     }
     
-    public JsonObject compute_block() {
+    //starts a new round of computing by creating a raw block
+    public JsonObject raw_block() {
     	JsonObject block = new JsonObject();
     	block.addProperty("BlockID", blockId);
     	block.addProperty("PrevHash", Hash.getHashString(getLongestBranch().last_block.toString()));
     	block.addProperty("Nonce", "00000000");
-    	block.addProperty("MinerID", "Server"+String.format("%02d", minerId));
-    	
+        block.addProperty("MinerID", "Server"+String.format("%02d", minerId));
+    
     	JsonArray newTxPool = new JsonArray();
     	JsonArray transactions = new JsonArray();
     	int N = TxPool.size();
@@ -113,9 +172,11 @@ public class DatabaseEngine {
     	for (; i<N; i++)
     		newTxPool.add(TxPool.get(i));
     	block.add("Transactions", transactions);
-    	
-    	String nonce = compute_nonce(block);
-    	block.addProperty("Nonce", nonce);
+        
+        TxPool = newTxPool;
+        newBlock = false;
+    	//String nonce = compute_nonce(block);
+    	//block.addProperty("Nonce", nonce);
     	return block;
     }
     
@@ -145,13 +206,6 @@ public class DatabaseEngine {
         }
     }
 
-    public int get(String userId) {
-        //createLock(userId);
-        //logLength++;
-        //check_output();
-        return getOrInit(userId, balances);
-    }
-
     public boolean transfer_balance(String fromId, String toId, int value, int miningFee, String UUID, HashMap<String, Integer> balance) {
         int fromBalance = getOrInit(fromId, balance);
         int toBalance = getOrInit(toId, balance);
@@ -166,11 +220,8 @@ public class DatabaseEngine {
 
         //output_log(4, fromId, toId, value);
         //check_output();
+        AddTx(fromId, toId, value, miningFee, UUID);
         return true;
-    }
-    
-    public boolean transfer(String fromId, String toId, int value, int miningFee, String UUID) {
-    	return transfer_balance(fromId, toId, value, miningFee, UUID, balances);
     }
 
     public boolean find_UUID(JsonArray transactions, String UUID) {
@@ -226,20 +277,6 @@ public class DatabaseEngine {
     		response.verify_result = 2;
     	
         return response;
-    }
-
-    public responseContainer getHeight(){
-        branch leaf = BlockChain.peek();
-    	responseContainer response = new responseContainer();
-    	response.result = leaf.length;
-    	response.block = leaf.last_block.toString();
-        return response;
-    }
-
-    public String getBlock(String hash){
-    	String response = null;
-    	response = blocks.get(hash).toString();
-    	return response;
     }
     
     public HashMap<String, Integer> compute_balance(JsonObject block) {
@@ -339,27 +376,7 @@ public class DatabaseEngine {
     	BlockChain = newBlockChain;
     }
     
-    public void pushBlock(String block){
-    	JsonParser parser = new JsonParser();
-    	JsonObject Block = (JsonObject) parser.parse(block);
-    	JsonObject block_chosen = CheckBlock(Block);
-    	if (block_chosen != null) {
-    		PutBlock(Block, block_chosen);
-    		Update_by_block(balances_block, Block);
-    	}
-        return;
-    }
 
-    public void pushTransaction(String fromId, String toId, int value, int miningFee, String UUID){
-    	int fromBalance = getOrInit(fromId, balances);
-    	int toBalance = getOrInit(toId, balances);
-    	if (value > miningFee && fromBalance > value) {
-    		AddTx(fromId, toId, value, miningFee, UUID);
-    		balances.put(fromId, fromBalance - value);
-            balances.put(toId, toBalance + value);
-    	}
-        return;
-    }
 
     public class responseContainer{
         private int result = 0;
@@ -396,7 +413,7 @@ public class DatabaseEngine {
 		return (byte)(i & 0xff);
 	}
 
-    public String compute_nonce(JsonObject block){
+    public JsonObject compute_nonce(JsonObject block){
         //compute
         block = (JsonObject)block.remove("nonce");
         jumpOut:
@@ -413,9 +430,11 @@ public class DatabaseEngine {
                                         block.addProperty("nonce",  new String(nonceByte));
                                         if(Hash.checkHash(Hash.getHashString(block.toString()))){
                                             System.out.println("compute_nonce(): Compute completed.");
-                                            return new String(nonceByte);
+                                            this.computing = false;
+                                            this.newBlock = true;
+                                            return block;
                                         }
-                                        if(stopComputing){
+                                        if(newBlock){
                                             break jumpOut;
                                         }
                                     }
@@ -426,7 +445,8 @@ public class DatabaseEngine {
                 }
             }
         }
+        this.computing = false;
         System.out.println("compute_nonce(): Stop computing blocks because received available block, return empty string.");
-        return new String();
+        return block;
     }
 }
