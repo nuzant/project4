@@ -41,7 +41,14 @@ public class DatabaseEngine {
     	
     	@Override
     	public int compareTo(branch another) {
-    		return another.length - this.length;
+    		String hash1 = Hash.getHashString(this.last_block.toString());
+    		String hash2 = Hash.getHashString(another.last_block.toString());
+    		int h1 = Integer.parseInt(hash1, 16);
+    		int h2 = Integer.parseInt(hash2, 16);
+    		if (another.length != this.length)
+    		    return another.length - this.length;
+    		else
+    			return h1-h2;
     	}
     }
 
@@ -336,8 +343,8 @@ public class DatabaseEngine {
     }
 
     public JsonObject CheckBlock(JsonObject block) {
-    	boolean check1 = true;
     	//check if the block’s string hash is legitimate
+    	boolean check1 = Hash.checkHash(block.toString());
     	
     	//check if the block’s hash to its previous block is indeed a block on the longest branch
     	JsonObject block_chosen = null;
