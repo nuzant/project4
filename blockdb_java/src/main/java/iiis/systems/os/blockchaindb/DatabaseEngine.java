@@ -54,7 +54,8 @@ public class DatabaseEngine {
     private int logLength = 0;
     private String dataDir;
     private int blockId = 1;
-    private volatile JsonArray TxPool = new JsonArray();
+    private volatile JsonArray TxPool_new = new JsonArray();
+    private volatile JsonArray TxPool_used = new JsonArray();
     private File logFile = new File(dataDir + "log.json");
     public boolean newBlock = false;
     public boolean computing = false;
@@ -101,7 +102,7 @@ public class DatabaseEngine {
     		Update_by_block(balances_block, Block);
         }
         newBlock = true;
-        //addValue(Block.get("MinerID").getAsString(), Block.get("MiningFee").getAsInt());
+        addValue(Block, balances_block);
 
         return;
     }
@@ -121,7 +122,7 @@ public class DatabaseEngine {
     //util functions
 
     public int getTransSize(){
-        return TxPool.size();    
+        return TxPool_new.size();    
     }
 
     private int getOrInit(String userId, HashMap<String, Integer> balance) {
@@ -153,14 +154,20 @@ public class DatabaseEngine {
     	Tx.addProperty("MiningFee", miningFee);
     	Tx.addProperty("UUID", UUID);
     	
-    	TxPool.add(Tx);
+    	TxPool_new.add(Tx);
     }
 
-    public void addValue(String id, int value){
-        int oldvalue = getOrInit(id, balances);
-        int oldvalue_block = getOrInit(id, balances_block);
-        balances.put(id, oldvalue + value);
-        balances_block.put(id, oldvalue_block + value);
+    public void addValue(JsonObject block, HashMap<String, Integer> balance){
+        JsonArray transactions = block.get("Transactions").getAsJsonArray();
+        int N = transactions.size();
+        String minerId = block.get("MinerId").getAsString();
+        getOrInit(minerId, balance);
+        for (int i=0; i<N; i++) {
+        	JsonObject Tx = transactions.get(i).getAsJsonObject();
+        	int current = balance.get(minerId);
+        	balance.put(minerId, current+Tx.get("MiningFee").getAsInt());
+        }
+        return;
     }
     
     //starts a new round of computing by creating a raw block
@@ -177,15 +184,17 @@ public class DatabaseEngine {
     
     	JsonArray newTxPool = new JsonArray();
     	JsonArray transactions = new JsonArray();
-    	int N = TxPool.size();
+    	int N = TxPool_new.size();
     	int i;
-    	for (i=0; i<N && i<50; i++) 
-    		transactions.add(TxPool.get(i));
+    	for (i=0; i<N && i<50; i++) {
+    		transactions.add(TxPool_new.get(i));
+    		TxPool_used.add(TxPool_new.get(i));
+    	}
     	for (; i<N; i++)
-    		newTxPool.add(TxPool.get(i));
+    		newTxPool.add(TxPool_new.get(i));
     	block.add("Transactions", transactions);
         
-        TxPool = newTxPool;
+        TxPool_new = newTxPool;
     	//String nonce = compute_nonce(block);
     	//block.addProperty("Nonce", nonce);
     	return block;
@@ -220,13 +229,11 @@ public class DatabaseEngine {
     public boolean transfer_balance(String fromId, String toId, int value, int miningFee, String UUID, HashMap<String, Integer> balance) {
         int fromBalance = getOrInit(fromId, balance);
         int toBalance = getOrInit(toId, balance);
-        if(fromBalance - value < 0){
-            locks.get(fromId).unlock();
-            locks.get(toId).unlock();
+        if(fromBalance - value - miningFee < 0){
             return false;
         }
         
-        balance.put(fromId, fromBalance - value);
+        balance.put(fromId, fromBalance - value - miningFee);
         balance.put(toId, toBalance + value);
 
         //output_log(4, fromId, toId, value);
@@ -271,7 +278,7 @@ public class DatabaseEngine {
     	}
     	
     	//try to find the transaction in the TxPool
-		found_in_TxPool = find_UUID(TxPool, UUID);
+		found_in_TxPool = find_UUID(TxPool_new, UUID);
     	
     	responseContainer response = new responseContainer();
     	if (found_in_BlockChain && depth >= 6) {
@@ -361,7 +368,7 @@ public class DatabaseEngine {
     	int N = transactions.size();
     	for (int i=0; i<N; i++) {
     		JsonObject Tx = transactions.get(i).getAsJsonObject();
-    		if (!TxPool.contains(Tx))
+    		if (TxPool_used.contains(Tx))
     			check3 = false;
     	}
     	
@@ -459,7 +466,7 @@ public class DatabaseEngine {
                                         block.addProperty("Nonce",  nonce);
                                         if(Hash.checkHash(Hash.getHashString(block.toString()))){
                                             System.out.println("compute_nonce(): Compute completed.");
-                                            //addValue(block.get("MinerID").getAsString(), block.get("MiningFee").getAsInt());
+                                            addValue(block, balances_block);
                                             return block;
                                         }
                                         if(newBlock){
