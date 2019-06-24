@@ -446,7 +446,11 @@ public class DatabaseEngine {
     }
     
     public void PutBlock(JsonObject block, JsonObject block_chosen) {
+<<<<<<< HEAD
         //Update transaction pool
+=======
+	//Update transaction pool
+>>>>>>> 7e7b476062217ba68a862cba2041122ab9d33e25
     	JsonArray transactions = block.get("Transactions").getAsJsonArray();
     	int N = transactions.size();
     	for(int i=0; i<N; i++) {
@@ -454,12 +458,17 @@ public class DatabaseEngine {
     		if(TxPool_new.contains(Tx))
     			TxPool_new.remove(Tx);
     		TxPool_used.add(Tx);
+<<<<<<< HEAD
         }
         
         if(block != null){
             blocks.put(Hash.getHashString(block.toString()), block);
         }
 
+=======
+    	}    
+	    
+>>>>>>> 7e7b476062217ba68a862cba2041122ab9d33e25
     	PriorityQueue<branch> newBlockChain = new PriorityQueue<branch>();
     	if (block_chosen != null) {
             while (BlockChain.isEmpty()) {
