@@ -56,8 +56,8 @@ public class DatabaseEngine {
     private int blockId = 1;
     private JsonArray TxPool = new JsonArray();
     private File logFile = new File(dataDir + "log.json");
-    public boolean computing = false;
     public boolean newBlock = false;
+    public boolean computing = false;
     public boolean firstRun = true;
 
     DatabaseEngine(String dataDir) {
@@ -97,7 +97,6 @@ public class DatabaseEngine {
     		Update_by_block(balances_block, Block);
         }
         newBlock = true;
-
         addValue(Block.get("MinerID").getAsString(), Block.get("MiningFee").getAsInt());
 
         return;
@@ -116,10 +115,6 @@ public class DatabaseEngine {
 
     //rpc calls end
     //util functions
-
-    public void setComputing(boolean b){
-        this.computing = b;
-    }
 
     public int getTransSize(){
         return TxPool.size();    
@@ -183,7 +178,6 @@ public class DatabaseEngine {
     	block.add("Transactions", transactions);
         
         TxPool = newTxPool;
-        newBlock = false;
         if(firstRun){
             firstRun = false;
         }
@@ -428,6 +422,7 @@ public class DatabaseEngine {
     public JsonObject compute_nonce(JsonObject block){
         //compute
         System.out.println("starting compute_nonce()");
+        this.computing = true;
         block = (JsonObject)block.remove("nonce");
         jumpOut:
         for(int i1 = 0; i1 < 128; i1++){
@@ -444,8 +439,6 @@ public class DatabaseEngine {
                                         if(Hash.checkHash(Hash.getHashString(block.toString()))){
                                             System.out.println("compute_nonce(): Compute completed.");
                                             addValue(block.get("MinerID").getAsString(), block.get("MiningFee").getAsInt());
-                                            this.computing = false;
-                                            this.newBlock = true;
                                             return block;
                                         }
                                         if(newBlock){
@@ -459,6 +452,7 @@ public class DatabaseEngine {
                 }
             }
         }
+        this.newBlock = false;
         this.computing = false;
         System.out.println("compute_nonce(): Stop computing blocks because received available block, return empty string.");
         return block;

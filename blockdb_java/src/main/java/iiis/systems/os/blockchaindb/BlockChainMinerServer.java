@@ -128,9 +128,9 @@ public class BlockChainMinerServer {
             if(debugcount % 9999999 == 0){
                 System.out.println(dbEngine.getTransSize());
             }
-            if(!dbEngine.newBlock && dbEngine.getTransSize() > 0 && !dbEngine.computing){
+            if(!dbEngine.computing && dbEngine.getTransSize() > 0){
                                                       //  && !(dbEngine.firstRun && dbEngine.getTransSize() < 50)){
-                System.out.println("???");
+                //System.out.println("???");
                 computer.setBlock(dbEngine.raw_block());
                 synchronized(computer){
                     computer.notify();
