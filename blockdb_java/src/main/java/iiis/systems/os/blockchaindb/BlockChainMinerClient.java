@@ -25,15 +25,15 @@ public class BlockChainMinerClient extends Thread{
     private Thread t;
 
     private String block;
-    private boolean sendBlock = false;
+    private volatile boolean sendBlock = false;
     private Transaction trans;
-    private boolean sendTrans = false;
+    private volatile boolean sendTrans = false;
 
     public Set<String> blocksReceived = new HashSet<String>();
     private String hash;
     private boolean sendGetBlock = false;
 
-    public boolean notice = false;
+    public volatile boolean notice = false;
 
     /** construct channel at host, port */
     BlockChainMinerClient(String host, int port){

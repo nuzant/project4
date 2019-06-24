@@ -8,6 +8,7 @@ import org.json.JSONObject;
 
 import com.google.gson.JsonObject;
 
+import java.io.File;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.util.Set;
@@ -49,7 +50,8 @@ public class BlockChainMinerServer {
     private static ServerInfo myInfo;
     private static Set<ServerInfo> othersInfo = new HashSet<ServerInfo>();
 
-    static private void initialize(String[] args) throws IOException{
+    //return miner server id
+    static private int initialize(String[] args) throws IOException{
         int serverid = 0;
 
         if(args.length == 2){
@@ -94,15 +96,24 @@ public class BlockChainMinerServer {
             }
         }
 
+        return serverid;
+
     }
 
     public static void main(String[] args) throws IOException, JSONException, InterruptedException {
         //read arguments
-        initialize(args);
+        int serverid = initialize(args);
         //start server (thread?)
         DatabaseEngine.setup(myInfo.dataDir);
-        dbEngine = DatabaseEngine.getInstance();
+
+        File mydir = new File(myInfo.dataDir);
+        if(mydir.exists()){
+            mydir.delete();
+        }
         
+        dbEngine = DatabaseEngine.getInstance();
+        dbEngine.setMinerId(serverid);
+
         final BlockChainMinerServer server = new BlockChainMinerServer();
         server.start(myInfo.host, myInfo.port);
 
@@ -127,7 +138,7 @@ public class BlockChainMinerServer {
             if(debugcount % 9999999 == 0){
                 //System.out.println(dbEngine.getTransSize());
             }
-            if(!dbEngine.computing && dbEngine.getTransSize() > 50){
+            if(!dbEngine.computing && dbEngine.getTransSize() > 5){
                 computer.setBlock(dbEngine.raw_block());
                 synchronized(computer){
                     computer.notify();
@@ -136,6 +147,7 @@ public class BlockChainMinerServer {
 
             if(computer.finished){
                 String newblock = computer.getBlock();
+                dbEngine.pushComputedBlock(newblock);
                 for(BlockChainMinerClient client: clients){
                     client.setBlock(newblock);
                     synchronized(client){

@@ -11,7 +11,7 @@ public class Computer extends Thread{
 
     private JsonObject block; 
 
-    public boolean finished = false;
+    public volatile boolean finished = false;
 
     Computer(DatabaseEngine dbEngine){
         this.dbEngine = dbEngine;
@@ -30,7 +30,9 @@ public class Computer extends Thread{
             }
             //this.finished = false;
             block = dbEngine.compute_nonce(block);
-            this.finished = true;
+            if(block != null){
+                this.finished = true;
+            }
         }
     }
 

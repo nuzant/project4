@@ -57,18 +57,17 @@ public class DatabaseEngine {
     private HashMap<String, Lock> locks = new HashMap<>();
     private HashMap<String, JsonObject> blocks = new HashMap<>();
     private PriorityQueue<branch> BlockChain = new PriorityQueue<branch>();
-    private int minerId;
+    private int minerId = 0;
     private int logLength = 0;
     private String dataDir;
     private int blockId = 1;
     private volatile JsonArray TxPool_new = new JsonArray();
     private volatile JsonArray TxPool_used = new JsonArray();
     private File logFile = new File(dataDir + "log.json");
-    public boolean newBlock = false;
-    public boolean computing = false;
-    public boolean firstRun = true;
+    public volatile boolean newBlock = false;
+    public volatile boolean computing = false;
 
-    public boolean getBlock = false;
+    public volatile boolean getBlock = false;
     public HashMap<String, String> remoteBlocks = new HashMap<>();
     public String getBlockHash;
 
@@ -108,12 +107,13 @@ public class DatabaseEngine {
     	JsonParser parser = new JsonParser();
     	JsonObject Block = (JsonObject) parser.parse(block);
     	JsonObject block_chosen = CheckBlock(Block);
-    	if (block_chosen != null) {
-    		PutBlock(Block, block_chosen);
-    		Update_by_block(balances_block, Block);
-        }
+            
+        PutBlock(Block, block_chosen);
+        Update_by_block(balances_block, Block);
+
         newBlock = true;
         addValue(Block, balances_block);
+        output_block(Block);
 
         return;
     }
@@ -131,6 +131,26 @@ public class DatabaseEngine {
 
     //rpc calls end
     //util functions
+
+    //called by server, set miner id
+    public void setMinerId(int i){
+        this.minerId = i;
+    }
+
+    //called by server when a new block is finished computing.
+    public void pushComputedBlock(String block){
+        JsonParser parser = new JsonParser();
+    	JsonObject Block = (JsonObject) parser.parse(block);
+        JsonObject block_chosen = CheckBlock(Block);
+        
+    	PutBlock(Block, block_chosen);
+    	Update_by_block(balances_block, Block);
+
+        addValue(Block, balances_block);
+        output_block(Block);
+
+        return;
+    }
 
     //database wait for client to ask for a remote block
     public String getRemoteBlock(String hash){
@@ -190,12 +210,12 @@ public class DatabaseEngine {
     public void addValue(JsonObject block, HashMap<String, Integer> balance){
         JsonArray transactions = block.get("Transactions").getAsJsonArray();
         int N = transactions.size();
-        String minerId = block.get("MinerId").getAsString();
+        String minerId = block.get("MinerID").getAsString();
         getOrInit(minerId, balance);
         for (int i=0; i<N; i++) {
         	JsonObject Tx = transactions.get(i).getAsJsonObject();
-        	int current = balance.get(minerId);
-        	balance.put(minerId, current+Tx.get("MiningFee").getAsInt());
+        	int current = getOrInit(minerId, balance);
+        	balance.put(minerId, current + Tx.get("MiningFee").getAsInt());
         }
         return;
     }
@@ -231,8 +251,13 @@ public class DatabaseEngine {
     }
     
     public void output_block(JsonObject block) {
-    	 //create blockfile 
-        File createBlockFile = new File(dataDir + Integer.toString(blockId) + ".json");
+         //create blockfile 
+        File dir = new File(dataDir);
+        if(!dir.exists()){
+            dir.mkdir();
+        }
+        File createBlockFile = new File(dataDir + Hash.getHashString(block.toString()) + ".json");
+        //System.out.println(createBlockFile.getName());
         createBlockFile.delete();
         if(!createBlockFile.exists()){
             try{
@@ -245,14 +270,13 @@ public class DatabaseEngine {
             }
         }
         // write new block
-        try(FileWriter file = new FileWriter(dataDir + Integer.toString(blockId) + ".json")){
+        try(FileWriter file = new FileWriter(dataDir + Hash.getHashString(block.toString()) + ".json")){
             file.write(block.toString());
             file.flush();
-
-            System.out.println("Writing information to block: " + dataDir + Integer.toString(blockId) + ".json");
+            System.out.println("Writing information to block: " + dataDir + Hash.getHashString(block.toString()) + ".json");
         } catch(IOException e){
-        //e.printStackTrace();
-        System.out.println("Fail to write block: " + dataDir + Integer.toString(blockId) + ".json");
+            //e.printStackTrace();
+            System.out.println("Fail to write block: " + dataDir + Hash.getHashString(block.toString()) + ".json");
         }
     }
 
@@ -333,8 +357,9 @@ public class DatabaseEngine {
     	String prevHash = block.get("PrevHash").getAsString();
     	s.push(block);
     	
-    	while (prevHash.equals(initHash)) {
-    		JsonObject now = blocks.get(prevHash);
+    	while (!prevHash.equals(initHash)) {
+            JsonObject now = blocks.get(prevHash);
+            //System.out.println(Hash.getHashString(now.toString()));
     		s.push(now);
     		prevHash = now.get("PrevHash").getAsString();
     	}
@@ -421,15 +446,29 @@ public class DatabaseEngine {
     }
     
     public void PutBlock(JsonObject block, JsonObject block_chosen) {
+        //Update transaction pool
+    	JsonArray transactions = block.get("Transactions").getAsJsonArray();
+    	int N = transactions.size();
+    	for(int i=0; i<N; i++) {
+    		JsonObject Tx = transactions.get(i).getAsJsonObject();
+    		if(TxPool_new.contains(Tx))
+    			TxPool_new.remove(Tx);
+    		TxPool_used.add(Tx);
+        }
+        
+        if(block != null){
+            blocks.put(Hash.getHashString(block.toString()), block);
+        }
+
     	PriorityQueue<branch> newBlockChain = new PriorityQueue<branch>();
     	if (block_chosen != null) {
-    	while (BlockChain.isEmpty()) {
-    		branch now = BlockChain.peek();
-    		if (now.last_block.equals(block_chosen))
-    			newBlockChain.add(new branch(now.length+1, block));
-    		else
-    			newBlockChain.add(now);
-    	}
+            while (BlockChain.isEmpty()) {
+                branch now = BlockChain.peek();
+                if (now.last_block.equals(block_chosen))
+                    newBlockChain.add(new branch(now.length+1, block));
+                else
+                    newBlockChain.add(now);
+            }
     	}
     	else
     		newBlockChain.add(new branch(1, block));
@@ -512,7 +551,7 @@ public class DatabaseEngine {
         }
         this.newBlock = false;
         this.computing = false;
-        System.out.println("compute_nonce(): Stop computing blocks because received available block, return empty string.");
-        return block;
+        System.out.println("compute_nonce(): Stop computing blocks because received available block, return null.");
+        return null;
     }
 }
