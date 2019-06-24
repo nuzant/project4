@@ -1,13 +1,13 @@
 syntax = "proto3";
 
 option java_multiple_files = true;
-option java_package = "iiis.systems.os.blockdb";
+option java_package = "iiis.systems.os.blockchaindb";
 option java_outer_classname = "DBProto";
 
 package blockdb;
 
 // Interface exported by the server.
-service BlockDatabase {
+service BlockChainMiner {
     // Return UserID's Balance on the Chain, after considering the latest valid block. Pending transactions have no effect on Get()
 	rpc Get(GetRequest) returns (GetResponse) {}
 

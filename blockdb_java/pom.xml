@@ -5,7 +5,7 @@
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>iiis.systems.os</groupId>
-    <artifactId>blockdb</artifactId>
+    <artifactId>blockchaindb</artifactId>
     <version>1.0</version>
 
     <packaging>jar</packaging>
@@ -74,7 +74,7 @@
                 <configuration>
                     <archive>
                         <manifest>
-                            <mainClass>iiis.systems.os.blockdb.BlockDatabaseServer</mainClass>
+                            <mainClass>iiis.systems.os.blockchaindb.BlockChainMinerServer</mainClass>
                         </manifest>
                     </archive>
                 </configuration>
