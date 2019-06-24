@@ -421,6 +421,16 @@ public class DatabaseEngine {
     }
     
     public void PutBlock(JsonObject block, JsonObject block_chosen) {
+	//Update transaction pool
+    	JsonArray transactions = block.get("Transactions").getAsJsonArray();
+    	int N = transactions.size();
+    	for(int i=0; i<N; i++) {
+    		JsonObject Tx = transactions.get(i).getAsJsonObject();
+    		if(TxPool_new.contains(Tx))
+    			TxPool_new.remove(Tx);
+    		TxPool_used.add(Tx);
+    	}    
+	    
     	PriorityQueue<branch> newBlockChain = new PriorityQueue<branch>();
     	if (block_chosen != null) {
     	while (BlockChain.isEmpty()) {
