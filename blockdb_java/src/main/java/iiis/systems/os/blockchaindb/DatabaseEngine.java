@@ -54,7 +54,7 @@ public class DatabaseEngine {
     private int logLength = 0;
     private String dataDir;
     private int blockId = 1;
-    private JsonArray TxPool = new JsonArray();
+    private volatile JsonArray TxPool = new JsonArray();
     private File logFile = new File(dataDir + "log.json");
     public boolean newBlock = false;
     public boolean computing = false;
@@ -71,7 +71,11 @@ public class DatabaseEngine {
     }
 
     public boolean transfer(String fromId, String toId, int value, int miningFee, String UUID) {
-    	return transfer_balance(fromId, toId, value, miningFee, UUID, balances);
+    	boolean flag = transfer_balance(fromId, toId, value, miningFee, UUID, balances);
+    	if (flag) {
+    		AddTx(fromId, toId, value, miningFee, UUID);
+    	}
+    	return flag;
     }
 
     public responseContainer getHeight(){
@@ -97,7 +101,7 @@ public class DatabaseEngine {
     		Update_by_block(balances_block, Block);
         }
         newBlock = true;
-        addValue(Block.get("MinerID").getAsString(), Block.get("MiningFee").getAsInt());
+        //addValue(Block.get("MinerID").getAsString(), Block.get("MiningFee").getAsInt());
 
         return;
     }
@@ -163,7 +167,11 @@ public class DatabaseEngine {
     public JsonObject raw_block() {
     	JsonObject block = new JsonObject();
     	block.addProperty("BlockID", blockId);
-    	block.addProperty("PrevHash", Hash.getHashString(getLongestBranch().last_block.toString()));
+    	if(!BlockChain.isEmpty())
+    	    block.addProperty("PrevHash", Hash.getHashString(getLongestBranch().last_block.toString()));
+    	else {
+    		block.addProperty("PrevHash", "0000000000000000000000000000000000000000000000000000000000000000");
+    	}
     	block.addProperty("Nonce", "00000000");
         block.addProperty("MinerID", "Server"+String.format("%02d", minerId));
     
@@ -178,9 +186,6 @@ public class DatabaseEngine {
     	block.add("Transactions", transactions);
         
         TxPool = newTxPool;
-        if(firstRun){
-            firstRun = false;
-        }
     	//String nonce = compute_nonce(block);
     	//block.addProperty("Nonce", nonce);
     	return block;
@@ -226,7 +231,6 @@ public class DatabaseEngine {
 
         //output_log(4, fromId, toId, value);
         //check_output();
-        AddTx(fromId, toId, value, miningFee, UUID);
         return true;
     }
 
@@ -333,18 +337,23 @@ public class DatabaseEngine {
     	boolean check2 = false;
     	PriorityQueue<branch> newBlockChain = new PriorityQueue<branch>();
     	String prevHash = block.get("PrevHash").getAsString();
-    	int length = BlockChain.peek().length;
-    	while (!BlockChain.isEmpty()) {
-    		branch now = BlockChain.peek();
-    		String hash = Hash.getHashString(now.last_block.toString());
-    		if (prevHash.contentEquals(hash) && now.length == length && !check2) {
-    			check2 = true;
-    			block_chosen = now.last_block;
-    		}
-    		BlockChain.remove();
-    		newBlockChain.add(now);
+    	int length;
+    	if(!BlockChain.isEmpty()) {
+    	    length = BlockChain.peek().length;
+    	    while (!BlockChain.isEmpty()) {
+    		    branch now = BlockChain.peek();
+    		    String hash = Hash.getHashString(now.last_block.toString());
+    		    if (prevHash.contentEquals(hash) && now.length == length && !check2) {
+    			    check2 = true;
+    			    block_chosen = now.last_block;
+    		    }
+    		    BlockChain.remove();
+    		    newBlockChain.add(now);
+    	    }
+    	    BlockChain = newBlockChain;
     	}
-    	BlockChain = newBlockChain;
+    	else
+    		check2 = true;
     	
     	//check if the block’s transactions are new transactions
     	boolean check3 = true;
@@ -359,7 +368,11 @@ public class DatabaseEngine {
     	//check if the block’s transactions are all legitimate
     	boolean check4 = true;
     	if (check2) {
-    	    HashMap<String, Integer> balance = compute_balance(block_chosen);
+    		HashMap<String, Integer> balance;
+    		if (block_chosen != null)
+    	         balance = compute_balance(block_chosen);
+    		else
+    			 balance = new HashMap<String, Integer>();
     	    if (!Update_by_block(balance, block))
     	    	check4 = false;
     	}
@@ -372,6 +385,7 @@ public class DatabaseEngine {
     
     public void PutBlock(JsonObject block, JsonObject block_chosen) {
     	PriorityQueue<branch> newBlockChain = new PriorityQueue<branch>();
+    	if (block_chosen != null) {
     	while (BlockChain.isEmpty()) {
     		branch now = BlockChain.peek();
     		if (now.last_block.equals(block_chosen))
@@ -379,6 +393,9 @@ public class DatabaseEngine {
     		else
     			newBlockChain.add(now);
     	}
+    	}
+    	else
+    		newBlockChain.add(new branch(1, block));
     	BlockChain = newBlockChain;
     }
     
@@ -415,30 +432,34 @@ public class DatabaseEngine {
     Return nothing. If not a single nonce has been solved by the function,
     it will throw an exception.
     */
-    public byte intToByte(int i){ // i < 128 here
-		return (byte)(i & 0xff);
+    public String intToHex(int i){ // i < 128 here
+		return Integer.toHexString(i);
 	}
 
     public JsonObject compute_nonce(JsonObject block){
         //compute
         System.out.println("starting compute_nonce()");
         this.computing = true;
-        block = (JsonObject)block.remove("nonce");
+        if (block == null)
+        	System.out.println("1");
+        //block = (JsonObject)block.remove("Nonce");
+        if (block == null)
+        	System.out.println("2");
         jumpOut:
-        for(int i1 = 0; i1 < 128; i1++){
-            for(int i2 = 0; i2 < 128; i2++){
-                for(int i3 = 0; i3 < 128; i3++){
-                    for(int i4 = 0; i4 < 128; i4++){
-                        for(int i5 = 0; i5 < 128; i5++){
-                            for(int i6 = 0; i6 < 128; i6++){
-                                for(int i7 = 0; i7 < 128; i7++){
-                                    for(int i8 = 0; i8 < 128; i8++){
-                                        byte[] nonceByte = {intToByte(i1), intToByte(i2), intToByte(i3), intToByte(i4),
-                                                                intToByte(i5), intToByte(i6), intToByte(i7), intToByte(i8)};
-                                        block.addProperty("nonce",  new String(nonceByte));
+        for(int i1 = 0; i1 < 16; i1++){
+            for(int i2 = 0; i2 < 16; i2++){
+                for(int i3 = 0; i3 < 16; i3++){
+                    for(int i4 = 0; i4 < 16; i4++){
+                        for(int i5 = 0; i5 < 16; i5++){
+                            for(int i6 = 0; i6 < 16; i6++){
+                                for(int i7 = 0; i7 < 16; i7++){
+                                    for(int i8 = 0; i8 < 16; i8++){
+                                        String nonce = intToHex(i1) + intToHex(i2) + intToHex(i3) + intToHex(i4) 
+                                                     + intToHex(i5) + intToHex(i6) + intToHex(i7) + intToHex(i8);
+                                        block.addProperty("Nonce",  nonce);
                                         if(Hash.checkHash(Hash.getHashString(block.toString()))){
                                             System.out.println("compute_nonce(): Compute completed.");
-                                            addValue(block.get("MinerID").getAsString(), block.get("MiningFee").getAsInt());
+                                            //addValue(block.get("MinerID").getAsString(), block.get("MiningFee").getAsInt());
                                             return block;
                                         }
                                         if(newBlock){
