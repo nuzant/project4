@@ -60,6 +60,10 @@ public class DatabaseEngine {
     public boolean computing = false;
     public boolean firstRun = true;
 
+    public boolean getBlock = false;
+    public HashMap<String, String> remoteBlocks = new HashMap<>();
+    public String getBlockHash;
+
     DatabaseEngine(String dataDir) {
         this.dataDir = dataDir;
     }
@@ -119,6 +123,25 @@ public class DatabaseEngine {
 
     //rpc calls end
     //util functions
+
+    //database wait for client to ask for a remote block
+    public String getRemoteBlock(String hash){
+        getBlock = true;
+        getBlockHash = hash;
+        try{
+            synchronized(this){
+                this.wait();
+            }
+        } catch(InterruptedException e){
+            // nothing happens here
+        }
+        getBlock = false;
+        return remoteBlocks.get(hash);
+    }
+
+    public void recover(String block){
+
+    }
 
     public int getTransSize(){
         return TxPool.size();    
@@ -329,7 +352,7 @@ public class DatabaseEngine {
     }
 
     public JsonObject CheckBlock(JsonObject block) {
-    	boolean check1 = true;
+    	boolean check1 = Hash.checkHash(Hash.getHashString(block.toString()));
     	//check if the block’s string hash is legitimate
     	
     	//check if the block’s hash to its previous block is indeed a block on the longest branch

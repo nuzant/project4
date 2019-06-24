@@ -11,7 +11,7 @@ public class Computer extends Thread{
 
     private JsonObject block; 
 
-    public boolean finished = true;
+    public boolean finished = false;
 
     Computer(DatabaseEngine dbEngine){
         this.dbEngine = dbEngine;
@@ -28,7 +28,7 @@ public class Computer extends Thread{
                 System.err.println("Computer thread interrupted.");
                 Thread.currentThread().interrupt();
             }
-            this.finished = false;
+            //this.finished = false;
             block = dbEngine.compute_nonce(block);
             this.finished = true;
         }

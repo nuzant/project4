@@ -116,7 +116,6 @@ public class BlockChainMinerServer {
         for(BlockChainMinerClient client: clients){
             client.start();
         }
-
         //start computer
         computer = new Computer(dbEngine);
         computer.start();
@@ -126,11 +125,9 @@ public class BlockChainMinerServer {
             //server running logic
             //System.out.print("?");
             if(debugcount % 9999999 == 0){
-                System.out.println(dbEngine.getTransSize());
+                //System.out.println(dbEngine.getTransSize());
             }
-            if(!dbEngine.computing && dbEngine.getTransSize() > 0){
-                                                      //  && !(dbEngine.firstRun && dbEngine.getTransSize() < 50)){
-                //System.out.println("???");
+            if(!dbEngine.computing && dbEngine.getTransSize() > 50){
                 computer.setBlock(dbEngine.raw_block());
                 synchronized(computer){
                     computer.notify();
@@ -147,6 +144,29 @@ public class BlockChainMinerServer {
                 }
                 computer.setFinished(false);
             }
+
+            if(dbEngine.getBlock){
+                String hash = dbEngine.getBlockHash; //hash of the block you asked
+                for(BlockChainMinerClient client: clients){
+                    client.setGetBlock(hash);
+                    synchronized(client){
+                        client.notify();
+                    }
+
+                    if(client.notice){
+                        for(String block: client.blocksReceived){
+                            dbEngine.remoteBlocks.put(hash, block);
+                            client.blocksReceived.remove(block);
+                        }
+
+                        synchronized(dbEngine){
+                            dbEngine.notify();
+                        }
+                    }
+                }
+            }
+
+            
 
             debugcount ++;
         }

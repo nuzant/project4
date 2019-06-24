@@ -7,6 +7,9 @@ import io.grpc.ManagedChannelBuilder;
 //import io.grpc.StatusRuntimeException;
 import io.grpc.stub.StreamObserver;
 
+import java.util.Set;
+import java.util.HashSet;
+
 
 /** 
     * class and methods that used to communicate with other servers
@@ -25,6 +28,12 @@ public class BlockChainMinerClient extends Thread{
     private boolean sendBlock = false;
     private Transaction trans;
     private boolean sendTrans = false;
+
+    public Set<String> blocksReceived = new HashSet<String>();
+    private String hash;
+    private boolean sendGetBlock = false;
+
+    public boolean notice = false;
 
     /** construct channel at host, port */
     BlockChainMinerClient(String host, int port){
@@ -56,6 +65,9 @@ public class BlockChainMinerClient extends Thread{
             if(sendTrans){
                 pushTransaction(trans);
             }
+            if(sendGetBlock){
+                getBlock(hash);
+            }
         }
     }
 
@@ -75,6 +87,47 @@ public class BlockChainMinerClient extends Thread{
     public void setTransaction(Transaction trans){
         this.sendTrans = true;
         this.trans = trans;
+    }
+
+    public void setGetBlock(String hash){
+        this.sendGetBlock = true;
+        this.hash = hash;
+    }
+
+    public void getBlock(String hash){
+        System.out.println("Getting block from: " + host + ":" + Integer.toString(port));
+
+        GetBlockRequest request = GetBlockRequest.newBuilder().setBlockHash(hash).build();
+        StreamObserver<JsonBlockString> observer = new StreamObserver<JsonBlockString>(){
+            //stream observer used to receive new block from other servers
+            @Override
+            public void onNext(JsonBlockString json){
+                String b = json.getJson();
+                blocksReceived.add(b);
+                notice = true;
+
+                return;
+            }
+
+            @Override
+            public void onError(Throwable t){
+                return;
+            }
+
+            @Override
+            public void onCompleted(){
+                return;
+            }
+        };
+
+        try{
+            asyncStub.getBlock(request, observer);
+            this.sendGetBlock = false;
+        } catch (RuntimeException e){
+            // fail to deliever?
+            System.out.println("Failed sending getblock request to host: " + host + ", port:" + Integer.toString(port));
+            return;
+        }
     }
 
     public void pushBlock(String json){
