@@ -106,7 +106,11 @@ public class DatabaseEngine {
     public void pushBlock(String block){
     	JsonParser parser = new JsonParser();
     	JsonObject Block = (JsonObject) parser.parse(block);
-    	JsonObject block_chosen = CheckBlock(Block);
+        JsonObject block_chosen = CheckBlock(Block);
+        if(!checkHash(block)) {
+            System.out.println("Reject hash =" + Hash.getHashString(block));
+            return;
+        }
             
         PutBlock(Block, block_chosen);
         Update_by_block(balances_block, Block);
@@ -114,6 +118,7 @@ public class DatabaseEngine {
         newBlock = true;
         addValue(Block, balances_block);
         output_block(Block);
+        blockId++;
 
         return;
     }
@@ -142,12 +147,17 @@ public class DatabaseEngine {
         JsonParser parser = new JsonParser();
     	JsonObject Block = (JsonObject) parser.parse(block);
         JsonObject block_chosen = CheckBlock(Block);
-        
+
+        if(!checkHash(block)) {
+            System.out.println("Reject hash =" + Hash.getHashString(block));
+            return;
+        }
     	PutBlock(Block, block_chosen);
     	Update_by_block(balances_block, Block);
 
         addValue(Block, balances_block);
         output_block(Block);
+        blockId ++;
 
         return;
     }
@@ -180,13 +190,6 @@ public class DatabaseEngine {
             return balance.get(userId);
         } else {
             return 1000;
-        }
-    }
-
-    private void createLock(String userId){
-        if(!locks.containsKey(userId)){
-            Lock lock = new ReentrantLock();
-            locks.put(userId, lock);
         }
     }
     
@@ -238,15 +241,12 @@ public class DatabaseEngine {
     	int i;
     	for (i=0; i<N && i<50; i++) {
     		transactions.add(TxPool_new.get(i));
-    		TxPool_used.add(TxPool_new.get(i));
+    		//TxPool_used.add(TxPool_new.get(i));
     	}
     	for (; i<N; i++)
     		newTxPool.add(TxPool_new.get(i));
     	block.add("Transactions", transactions);
-        
-        TxPool_new = newTxPool;
-    	//String nonce = compute_nonce(block);
-    	//block.addProperty("Nonce", nonce);
+
     	return block;
     }
     
@@ -256,7 +256,7 @@ public class DatabaseEngine {
         if(!dir.exists()){
             dir.mkdir();
         }
-        File createBlockFile = new File(dataDir + Hash.getHashString(block.toString()) + ".json");
+        File createBlockFile = new File(dataDir + Integer.toString(blockId) + ".json");
         //System.out.println(createBlockFile.getName());
         createBlockFile.delete();
         if(!createBlockFile.exists()){
@@ -270,28 +270,25 @@ public class DatabaseEngine {
             }
         }
         // write new block
-        try(FileWriter file = new FileWriter(dataDir + Hash.getHashString(block.toString()) + ".json")){
+        try(FileWriter file = new FileWriter(dataDir + Integer.toString(blockId) + ".json")){
             file.write(block.toString());
             file.flush();
-            System.out.println("Writing information to block: " + dataDir + Hash.getHashString(block.toString()) + ".json");
+            System.out.println("Writing information to block: " + dataDir + Integer.toString(blockId) + ".json");
         } catch(IOException e){
             //e.printStackTrace();
-            System.out.println("Fail to write block: " + dataDir + Hash.getHashString(block.toString()) + ".json");
+            System.out.println("Fail to write block: " + dataDir + Integer.toString(blockId) + ".json");
         }
     }
 
     public boolean transfer_balance(String fromId, String toId, int value, int miningFee, String UUID, HashMap<String, Integer> balance) {
         int fromBalance = getOrInit(fromId, balance);
         int toBalance = getOrInit(toId, balance);
-        if(fromBalance - value - miningFee < 0){
+        if(fromBalance - value < 0){
             return false;
         }
         
-        balance.put(fromId, fromBalance - value - miningFee);
+        balance.put(fromId, fromBalance - value);
         balance.put(toId, toBalance + value);
-
-        //output_log(4, fromId, toId, value);
-        //check_output();
         return true;
     }
 
@@ -390,10 +387,11 @@ public class DatabaseEngine {
     	return true;
     }
 
+    public boolean checkHash(String block){
+        return Hash.checkHash(Hash.getHashString(block));
+    }
+
     public JsonObject CheckBlock(JsonObject block) {
-    	boolean check1 = Hash.checkHash(Hash.getHashString(block.toString()));
-    	//check if the block’s string hash is legitimate
-    	
     	//check if the block’s hash to its previous block is indeed a block on the longest branch
     	JsonObject block_chosen = null;
     	boolean check2 = false;
@@ -439,18 +437,14 @@ public class DatabaseEngine {
     	    	check4 = false;
     	}
     	
-    	if (check1 && check2 && check3 && check4)
+    	if (check2 && check3 && check4)
             return block_chosen;
     	else
     		return null;
     }
     
     public void PutBlock(JsonObject block, JsonObject block_chosen) {
-<<<<<<< HEAD
         //Update transaction pool
-=======
-	//Update transaction pool
->>>>>>> 7e7b476062217ba68a862cba2041122ab9d33e25
     	JsonArray transactions = block.get("Transactions").getAsJsonArray();
     	int N = transactions.size();
     	for(int i=0; i<N; i++) {
@@ -458,17 +452,12 @@ public class DatabaseEngine {
     		if(TxPool_new.contains(Tx))
     			TxPool_new.remove(Tx);
     		TxPool_used.add(Tx);
-<<<<<<< HEAD
         }
         
         if(block != null){
             blocks.put(Hash.getHashString(block.toString()), block);
         }
 
-=======
-    	}    
-	    
->>>>>>> 7e7b476062217ba68a862cba2041122ab9d33e25
     	PriorityQueue<branch> newBlockChain = new PriorityQueue<branch>();
     	if (block_chosen != null) {
             while (BlockChain.isEmpty()) {
@@ -543,8 +532,9 @@ public class DatabaseEngine {
                                                      + intToHex(i5) + intToHex(i6) + intToHex(i7) + intToHex(i8);
                                         block.addProperty("Nonce",  nonce);
                                         if(Hash.checkHash(Hash.getHashString(block.toString()))){
-                                            System.out.println("compute_nonce(): Compute completed.");
                                             addValue(block, balances_block);
+                                            this.computing = false;
+                                            System.out.println("compute_nonce(): Compute completed. Hash = " + Hash.getHashString(block.toString()));
                                             return block;
                                         }
                                         if(newBlock){

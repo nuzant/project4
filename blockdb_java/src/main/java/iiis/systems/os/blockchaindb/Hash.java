@@ -32,7 +32,6 @@ public class Hash {
 		return bytes;
 	}
 
-
 	public static boolean checkHash(String string) {
 		return string.substring(0,5).equals("00000");
 	}

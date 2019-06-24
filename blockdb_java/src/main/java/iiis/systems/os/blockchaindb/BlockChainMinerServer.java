@@ -105,11 +105,6 @@ public class BlockChainMinerServer {
         int serverid = initialize(args);
         //start server (thread?)
         DatabaseEngine.setup(myInfo.dataDir);
-
-        File mydir = new File(myInfo.dataDir);
-        if(mydir.exists()){
-            mydir.delete();
-        }
         
         dbEngine = DatabaseEngine.getInstance();
         dbEngine.setMinerId(serverid);
@@ -138,23 +133,24 @@ public class BlockChainMinerServer {
             if(debugcount % 9999999 == 0){
                 //System.out.println(dbEngine.getTransSize());
             }
-            if(!dbEngine.computing && dbEngine.getTransSize() > 5){
-                computer.setBlock(dbEngine.raw_block());
-                synchronized(computer){
-                    computer.notify();
-                }
-            }
-
-            if(computer.finished){
-                String newblock = computer.getBlock();
-                dbEngine.pushComputedBlock(newblock);
-                for(BlockChainMinerClient client: clients){
-                    client.setBlock(newblock);
-                    synchronized(client){
-                        client.notify();
+            synchronized(computer){
+                if(computer.finished){
+                    String newblock = computer.getBlock();
+                    dbEngine.pushComputedBlock(newblock);
+                    for(BlockChainMinerClient client: clients){
+                        client.setBlock(newblock);
+                        synchronized(client){
+                            client.notify();
+                        }
                     }
+                    computer.clearBlock();
+                    computer.setFinished(false);
+                } else {
+                    if(!dbEngine.computing && dbEngine.getTransSize() > 5){
+                        computer.setBlock(dbEngine.raw_block());
+                        computer.notify();
+                    }    
                 }
-                computer.setFinished(false);
             }
 
             if(dbEngine.getBlock){
@@ -177,12 +173,8 @@ public class BlockChainMinerServer {
                     }
                 }
             }
-
-            
-
             debugcount ++;
         }
-
 
         //server.blockUntilShutdown();
     }

@@ -47,6 +47,7 @@ iiis/systems/os/blockchaindb/BlockChainMinerClient$1.class
 iiis/systems/os/blockchaindb/Transaction.class
 iiis/systems/os/blockchaindb/DBProto$1.class
 iiis/systems/os/blockchaindb/GetHeightResponseOrBuilder.class
+iiis/systems/os/blockchaindb/BlockChainMinerClient$3.class
 iiis/systems/os/blockchaindb/BlockOrBuilder.class
 iiis/systems/os/blockchaindb/GetHeightResponse$Builder.class
 iiis/systems/os/blockchaindb/VerifyResponse$Results$1.class

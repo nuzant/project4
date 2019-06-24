@@ -9,7 +9,7 @@ public class Computer extends Thread{
     private String result = "default";
     private DatabaseEngine dbEngine = null;
 
-    private JsonObject block; 
+    private volatile JsonObject block = null; 
 
     public volatile boolean finished = false;
 
@@ -22,6 +22,10 @@ public class Computer extends Thread{
             try{
                 synchronized(this){
                     this.wait();
+                    block = dbEngine.compute_nonce(block);
+                    if(block != null){
+                        this.finished = true;
+                    }
                 }
             } catch(InterruptedException e) {
                 //i dont actually know in what situation this can happen
@@ -29,10 +33,6 @@ public class Computer extends Thread{
                 Thread.currentThread().interrupt();
             }
             //this.finished = false;
-            block = dbEngine.compute_nonce(block);
-            if(block != null){
-                this.finished = true;
-            }
         }
     }
 
@@ -46,6 +46,10 @@ public class Computer extends Thread{
             t = new Thread(this, name);
             t.start();
         }
+    }
+
+    public void clearBlock(){
+        this.block = null;
     }
 
     public void setBlock(JsonObject block){
