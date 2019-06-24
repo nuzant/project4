@@ -30,6 +30,7 @@ public class DatabaseEngine {
         //instance.print_balance();
     }
     
+    // data structures
     protected class branch implements Comparable<branch> {
     	private int length;
     	private JsonObject last_block;
@@ -49,7 +50,33 @@ public class DatabaseEngine {
     		    return another.length - this.length;
     		else
     			return h1-h2;
-    	}
+        }
+    }
+
+    public class responseContainer{
+        private int result = 0;
+        private String block = "";
+        private int verify_result = 0;
+        responseContainer(){
+        }
+        
+        responseContainer(int result, String block, int verify_result){
+            this.result = result;
+            this.block = block;
+            this.verify_result = verify_result;
+        }
+
+        public int getResult(){
+            return this.result;
+        }
+
+        public String getBlock(){
+            return this.block;
+        }
+        
+        public int getVerifyResult() {
+        	return this.verify_result;
+        }
     }
 
     private HashMap<String, Integer> balances = new HashMap<>();
@@ -78,7 +105,7 @@ public class DatabaseEngine {
     //rpc calls 
 
     public int get(String userId) {
-        return getOrInit(userId, balances);
+        return getOrInit(userId, balances_block);
     }
 
     public boolean transfer(String fromId, String toId, int value, int miningFee, String UUID) {
@@ -104,21 +131,11 @@ public class DatabaseEngine {
     }
 
     public void pushBlock(String block){
-    	JsonParser parser = new JsonParser();
-    	JsonObject Block = (JsonObject) parser.parse(block);
-        JsonObject block_chosen = CheckBlock(Block);
-        if(!checkHash(block)) {
-            System.out.println("Reject hash =" + Hash.getHashString(block));
-            return;
-        }
-            
-        PutBlock(Block, block_chosen);
-        Update_by_block(balances_block, Block);
+        JsonParser parser = new JsonParser();
+        JsonObject Block = (JsonObject) parser.parse(block);
 
+        processNewBlock(Block);
         newBlock = true;
-        addValue(Block, balances_block);
-        output_block(Block);
-        blockId++;
 
         return;
     }
@@ -126,7 +143,7 @@ public class DatabaseEngine {
     public void pushTransaction(String fromId, String toId, int value, int miningFee, String UUID){
     	int fromBalance = getOrInit(fromId, balances);
     	int toBalance = getOrInit(toId, balances);
-    	if (value > miningFee && fromBalance > value) {
+    	if (fromBalance > value) {
     		AddTx(fromId, toId, value, miningFee, UUID);
     		balances.put(fromId, fromBalance - value);
             balances.put(toId, toBalance + value);
@@ -135,7 +152,8 @@ public class DatabaseEngine {
     }
 
     //rpc calls end
-    //util functions
+
+    //server interactions
 
     //called by server, set miner id
     public void setMinerId(int i){
@@ -146,20 +164,9 @@ public class DatabaseEngine {
     public void pushComputedBlock(String block){
         JsonParser parser = new JsonParser();
     	JsonObject Block = (JsonObject) parser.parse(block);
-        JsonObject block_chosen = CheckBlock(Block);
 
-        if(!checkHash(block)) {
-            System.out.println("Reject hash =" + Hash.getHashString(block));
-            return;
-        }
-    	PutBlock(Block, block_chosen);
-    	Update_by_block(balances_block, Block);
+        processNewBlock(Block);
 
-        addValue(Block, balances_block);
-        output_block(Block);
-        blockId ++;
-
-        return;
     }
 
     //database wait for client to ask for a remote block
@@ -181,10 +188,14 @@ public class DatabaseEngine {
 
     }
 
+    //get new transaction pool size
     public int getTransSize(){
         return TxPool_new.size();    
     }
+    
+    //server interactionss end
 
+    //local calls
     private int getOrInit(String userId, HashMap<String, Integer> balance) {
         if (balance.containsKey(userId)) {
             return balance.get(userId);
@@ -209,7 +220,8 @@ public class DatabaseEngine {
     	
     	TxPool_new.add(Tx);
     }
-
+    
+    //used to update mining fee
     public void addValue(JsonObject block, HashMap<String, Integer> balance){
         JsonArray transactions = block.get("Transactions").getAsJsonArray();
         int N = transactions.size();
@@ -256,7 +268,7 @@ public class DatabaseEngine {
         if(!dir.exists()){
             dir.mkdir();
         }
-        File createBlockFile = new File(dataDir + Integer.toString(blockId) + ".json");
+        File createBlockFile = new File(dataDir + Hash.getHashString(block.toString()) + ".json");
         //System.out.println(createBlockFile.getName());
         createBlockFile.delete();
         if(!createBlockFile.exists()){
@@ -270,13 +282,13 @@ public class DatabaseEngine {
             }
         }
         // write new block
-        try(FileWriter file = new FileWriter(dataDir + Integer.toString(blockId) + ".json")){
+        try(FileWriter file = new FileWriter(dataDir + Hash.getHashString(block.toString()) + ".json")){
             file.write(block.toString());
             file.flush();
-            System.out.println("Writing information to block: " + dataDir + Integer.toString(blockId) + ".json");
+            System.out.println("Writing information to block: " + dataDir + Hash.getHashString(block.toString()) + ".json");
         } catch(IOException e){
             //e.printStackTrace();
-            System.out.println("Fail to write block: " + dataDir + Integer.toString(blockId) + ".json");
+            System.out.println("Fail to write block: " + dataDir + Hash.getHashString(block.toString()) + ".json");
         }
     }
 
@@ -347,28 +359,6 @@ public class DatabaseEngine {
         return response;
     }
     
-    public HashMap<String, Integer> compute_balance(JsonObject block) {
-    	HashMap<String, Integer> balance = new HashMap<>();
-    	Stack<JsonObject> s = new Stack<JsonObject>();
-    	String initHash = "0000000000000000000000000000000000000000000000000000000000000000";
-    	String prevHash = block.get("PrevHash").getAsString();
-    	s.push(block);
-    	
-    	while (!prevHash.equals(initHash)) {
-            JsonObject now = blocks.get(prevHash);
-            //System.out.println(Hash.getHashString(now.toString()));
-    		s.push(now);
-    		prevHash = now.get("PrevHash").getAsString();
-    	}
-    	
-    	while(s.empty()) {
-    		JsonObject now = s.pop();
-    		Update_by_block(balance, now);
-    	}
-    	
-    	return balance;
-    }
-    
     public boolean Update_by_block(HashMap<String, Integer> balance, JsonObject block) {
     	JsonArray transactions = block.get("Transactions").getAsJsonArray();
 		int N = transactions.size();
@@ -379,73 +369,108 @@ public class DatabaseEngine {
 			String toId = Tx.get("ToID").getAsString();
 			int value = Tx.get("Value").getAsInt();
 			int miningFee = Tx.get("MiningFee").getAsInt();
-			String UUID = Tx.get("UUID").getAsString();
+            String UUID = Tx.get("UUID").getAsString();
 			if (!transfer_balance(fromId, toId, value, miningFee, UUID, balance))
 				return false;
 		}
-    	
+        
+        // mining fee should be computed block by block
+        addValue(block, balance);
     	return true;
     }
 
+    // compute balance of a chain (from a block)
+    public HashMap<String, Integer> compute_balance(JsonObject block) {
+    	HashMap<String, Integer> balance = new HashMap<>();
+    	Stack<JsonObject> s = new Stack<JsonObject>();
+    	String initHash = "0000000000000000000000000000000000000000000000000000000000000000";
+    	String prevHash = block.get("PrevHash").getAsString();
+    	s.push(block);
+    	
+    	while (!prevHash.equals(initHash)) {
+            JsonObject now = blocks.get(prevHash);
+            s.push(now);
+    		prevHash = now.get("PrevHash").getAsString();
+    	}
+    	
+    	while(s.empty()) {
+    		JsonObject now = s.pop();
+    		Update_by_block(balance, now);
+    	}
+    	
+    	return balance;
+    }
+
+    // check if block hash is available
     public boolean checkHash(String block){
         return Hash.checkHash(Hash.getHashString(block));
     }
 
-    public JsonObject CheckBlock(JsonObject block) {
-    	//check if the block’s hash to its previous block is indeed a block on the longest branch
-    	JsonObject block_chosen = null;
-    	boolean check2 = false;
-    	PriorityQueue<branch> newBlockChain = new PriorityQueue<branch>();
-    	String prevHash = block.get("PrevHash").getAsString();
-    	int length;
-    	if(!BlockChain.isEmpty()) {
-    	    length = BlockChain.peek().length;
-    	    while (!BlockChain.isEmpty()) {
-    		    branch now = BlockChain.peek();
-    		    String hash = Hash.getHashString(now.last_block.toString());
-    		    if (prevHash.contentEquals(hash) && now.length == length && !check2) {
-    			    check2 = true;
-    			    block_chosen = now.last_block;
-    		    }
-    		    BlockChain.remove();
-    		    newBlockChain.add(now);
-    	    }
-    	    BlockChain = newBlockChain;
-    	}
-    	else
-    		check2 = true;
-    	
-    	//check if the block’s transactions are new transactions
-    	boolean check3 = true;
+    // check if the previous block of this block is the end of the chain. return true if it is the first block of the chain and blockchain is empty
+    public boolean checkPreviousBlock(JsonObject block){
+        String init = "0000000000000000000000000000000000000000000000000000000000000000";
+
+        if(BlockChain.isEmpty()){
+            return block.get("PrevHash").getAsString().equals(init);
+        } else {
+            for(branch b: BlockChain){
+                if(block.get("PrevHash").getAsString().equals(Hash.getHashString(b.last_block.toString()))) return true;
+            }
+            return false;
+        }
+    }
+
+    // check if the transactions in block is new
+    public boolean checkNewTrans(JsonObject block){
     	JsonArray transactions = block.get("Transactions").getAsJsonArray();
     	int N = transactions.size();
     	for (int i=0; i<N; i++) {
     		JsonObject Tx = transactions.get(i).getAsJsonObject();
     		if (TxPool_used.contains(Tx))
-    			check3 = false;
-    	}
-    	
-    	//check if the block’s transactions are all legitimate
-    	boolean check4 = true;
-    	if (check2) {
-    		HashMap<String, Integer> balance;
-    		if (block_chosen != null)
-    	         balance = compute_balance(block_chosen);
-    		else
-    			 balance = new HashMap<String, Integer>();
-    	    if (!Update_by_block(balance, block))
-    	    	check4 = false;
-    	}
-    	
-    	if (check2 && check3 && check4)
-            return block_chosen;
-    	else
-    		return null;
+    			return false;
+        }
+        return true;
     }
-    
-    public void PutBlock(JsonObject block, JsonObject block_chosen) {
-        //Update transaction pool
-    	JsonArray transactions = block.get("Transactions").getAsJsonArray();
+
+    // chech if the transactions in the block are legit
+    public boolean checkLegitTrans(JsonObject block){
+        HashMap<String, Integer> balance = compute_balance(block);
+        return Update_by_block(balance, block);
+    }
+
+    // put the block in blocks data structure
+    public void putBlock(JsonObject block){
+        blocks.put(Hash.getHashString(block.toString()), block);
+    }
+
+    // delete the block in blocks data structure
+    public void deleteBlock(JsonObject block){
+        blocks.remove(Hash.getHashString(block.toString()));
+    }
+
+    // extend the branch
+    public void extendBranch(JsonObject block){
+        String init = "0000000000000000000000000000000000000000000000000000000000000000";
+        if(block.get("PrevHash").getAsString().equals(init)){
+            BlockChain.add(new branch(1, block));
+            return;
+        }
+
+        branch oldbranch = new branch(0, new JsonObject());
+        for(branch old: BlockChain){
+            if(block.get("PrevHash").getAsString().equals(Hash.getHashString(old.last_block.toString()))){
+                oldbranch = old;
+                break;
+            }
+        }
+        branch newbranch = new branch(oldbranch.length + 1, block);
+        BlockChain.remove(oldbranch);
+        BlockChain.add(newbranch);
+    }
+
+    // update the transaction pool (both new and old) w.r.t. block
+    public void updateTransPool(JsonObject block){
+        JsonArray transactions = block.get("Transactions").getAsJsonArray();
     	int N = transactions.size();
     	for(int i=0; i<N; i++) {
     		JsonObject Tx = transactions.get(i).getAsJsonObject();
@@ -453,59 +478,44 @@ public class DatabaseEngine {
     			TxPool_new.remove(Tx);
     		TxPool_used.add(Tx);
         }
-        
-        if(block != null){
-            blocks.put(Hash.getHashString(block.toString()), block);
+    }
+
+    // new block
+    public void processNewBlock(JsonObject block){
+        if(!checkHash(block.toString())){
+            System.out.println("Reject hash: " + Hash.getHashString(block.toString()) + "for chechhash");
+            return;
         }
 
-    	PriorityQueue<branch> newBlockChain = new PriorityQueue<branch>();
-    	if (block_chosen != null) {
-            while (BlockChain.isEmpty()) {
-                branch now = BlockChain.peek();
-                if (now.last_block.equals(block_chosen))
-                    newBlockChain.add(new branch(now.length+1, block));
-                else
-                    newBlockChain.add(now);
-            }
-    	}
-    	else
-    		newBlockChain.add(new branch(1, block));
-    	BlockChain = newBlockChain;
+        if(!checkNewTrans(block)){
+            System.out.println("Reject hash: " + Hash.getHashString(block.toString()) + "for repeated transaction");
+            return;
+        }
+
+        if(!checkPreviousBlock(block)){
+            recover(block.toString());
+        } else {
+            putBlock(block);
+            extendBranch(block);
+            updateTransPool(block);
+        }
+
+        if(!checkLegitTrans(block)){
+            deleteBlock(block);
+            return;
+        }
+
+        // everytime we put a block into our memory, compute balance based on the block 
+        // (the result of get operation should be based on newest block in memory)
+        balances_block = compute_balance(block);
+        balances = balances_block;
+        output_block(block);
+        blockId++;
     }
+
+    //local calls end
     
-
-
-    public class responseContainer{
-        private int result = 0;
-        private String block = "";
-        private int verify_result = 0;
-        responseContainer(){
-        }
-        
-        responseContainer(int result, String block, int verify_result){
-            this.result = result;
-            this.block = block;
-            this.verify_result = verify_result;
-        }
-
-        public int getResult(){
-            return this.result;
-        }
-
-        public String getBlock(){
-            return this.block;
-        }
-        
-        public int getVerifyResult() {
-        	return this.verify_result;
-        }
-    }
-    /*
-    This method will compute one satisfiable nonce, which is a 8-digit String
-    for the block, and fill the "nonce" field with the nonce.
-    Return nothing. If not a single nonce has been solved by the function,
-    it will throw an exception.
-    */
+    //compute
     public String intToHex(int i){ // i < 128 here
 		return Integer.toHexString(i);
 	}
@@ -532,7 +542,7 @@ public class DatabaseEngine {
                                                      + intToHex(i5) + intToHex(i6) + intToHex(i7) + intToHex(i8);
                                         block.addProperty("Nonce",  nonce);
                                         if(Hash.checkHash(Hash.getHashString(block.toString()))){
-                                            addValue(block, balances_block);
+                                            // addValue(block, balances_block);
                                             this.computing = false;
                                             System.out.println("compute_nonce(): Compute completed. Hash = " + Hash.getHashString(block.toString()));
                                             return block;
