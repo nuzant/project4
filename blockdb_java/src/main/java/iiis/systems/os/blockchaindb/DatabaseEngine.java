@@ -404,7 +404,7 @@ public class DatabaseEngine {
     		prevHash = now.get("PrevHash").getAsString();
     	}
     	
-    	while(s.empty()) {
+    	while(!s.empty()) {
     		JsonObject now = s.pop();
     		Update_by_block(balance, now);
     	}
