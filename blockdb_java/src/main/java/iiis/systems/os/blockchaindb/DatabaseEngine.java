@@ -122,8 +122,11 @@ public class DatabaseEngine {
 
     public responseContainer getHeight(){
         branch leaf = BlockChain.peek();
-    	responseContainer response = new responseContainer();
-    	response.result = leaf.length;
+        responseContainer response = new responseContainer();
+        if(leaf!=null)
+        response.result = leaf.length;
+        else
+        response.result = 0;
     	response.block = leaf.last_block.toString();
         return response;
     }
@@ -323,28 +326,34 @@ public class DatabaseEngine {
     }
     
     public responseContainer verify(String UUID){
-    	JsonObject current_block = BlockChain.peek().last_block;
-    	String current_hash = Hash.getHashString(current_block.toString());
     	String first_hash = "0000000000000000000000000000000000000000000000000000000000000000";
     	int depth = 0;
     	boolean found_in_BlockChain = false, found_in_TxPool = false;
-    	
-    	//try to find the transaction on the longest chain
-    	while (true) {
-    		JsonArray transactions = current_block.getAsJsonArray("Transactions");
-    		found_in_BlockChain = find_UUID(transactions, UUID);
+        
+        branch leaf =  BlockChain.peek();
+        JsonObject current_block = new JsonObject();
+        //try to find the transaction on the longest chain
+        if(leaf!=null) {
+            current_block = leaf.last_block;
+    	    while (true) {
+    		    JsonArray transactions = current_block.getAsJsonArray("Transactions");
+    		    found_in_BlockChain = find_UUID(transactions, UUID);
     		
-    		if(found_in_BlockChain)
-    			break;
+    		    if(found_in_BlockChain)
+    			    break;
     		
-    		String prev_hash = current_block.get("PrevHash").getAsString();
-    		if(prev_hash.contentEquals(first_hash))
-    			break;
-    		
-    		current_block = blocks.get(prev_hash);
-    		current_hash = Hash.getHashString(current_block.toString());
-    		depth++;
-    	}
+        		String prev_hash = current_block.get("PrevHash").getAsString();
+    	    	if(prev_hash.contentEquals(first_hash))
+    		    	break;
+            
+                current_block = blocks.get(prev_hash);
+                if(current_block == null) break;
+                
+                depth++;
+            }
+        }
+        else
+            found_in_BlockChain = false;
     	
     	//try to find the transaction in the TxPool
 		found_in_TxPool = find_UUID(TxPool_new, UUID);

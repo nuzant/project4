@@ -8,7 +8,6 @@ iiis/systems/os/blockchaindb/BlockChainMinerClient$2.class
 iiis/systems/os/blockchaindb/Transaction$Builder.class
 iiis/systems/os/blockchaindb/Transaction$Types.class
 iiis/systems/os/blockchaindb/Block$Builder.class
-iiis/systems/os/blockchaindb/DatabaseEngine.class
 iiis/systems/os/blockchaindb/VerifyResponse$Results.class
 iiis/systems/os/blockchaindb/BlockChainMinerGrpc$BlockChainMinerImplBase.class
 iiis/systems/os/blockchaindb/GetBlockRequest$1.class
@@ -31,7 +30,6 @@ iiis/systems/os/blockchaindb/VerifyResponseOrBuilder.class
 iiis/systems/os/blockchaindb/BlockChainMinerGrpc$BlockChainMinerFutureStub.class
 iiis/systems/os/blockchaindb/BlockChainMinerServer$1.class
 iiis/systems/os/blockchaindb/Null$Builder.class
-iiis/systems/os/blockchaindb/DatabaseEngine$branch.class
 iiis/systems/os/blockchaindb/GetResponse$Builder.class
 iiis/systems/os/blockchaindb/JsonBlockString.class
 iiis/systems/os/blockchaindb/BlockChainMinerGrpc$1.class
@@ -50,7 +48,6 @@ iiis/systems/os/blockchaindb/VerifyResponse$Builder.class
 iiis/systems/os/blockchaindb/BlockChainMinerGrpc$BlockChainMinerDescriptorSupplier.class
 iiis/systems/os/blockchaindb/GetBlockRequest$Builder.class
 iiis/systems/os/blockchaindb/BlockChainMinerServer.class
-iiis/systems/os/blockchaindb/DatabaseEngine$responseContainer.class
 iiis/systems/os/blockchaindb/BlockChainMinerClient$1.class
 iiis/systems/os/blockchaindb/BlockChainMinerServer$BlockChainMinerImpl.class
 iiis/systems/os/blockchaindb/Transaction.class
