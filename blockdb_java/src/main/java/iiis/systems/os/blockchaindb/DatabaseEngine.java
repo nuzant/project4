@@ -490,6 +490,43 @@ public class DatabaseEngine {
     		TxPool_used.add(Tx);
         }
     }
+    
+    public void print_balance_block(int i) {
+    	//create blockfile 
+        File dir = new File(dataDir);
+        if(!dir.exists()){
+            dir.mkdir();
+        }
+        JsonArray block = new JsonArray();
+        for(String key: balances_block.keySet()) {
+        	JsonObject b = new JsonObject();
+        	b.addProperty("User", key);
+        	b.addProperty("Money", balances_block.get(key));
+        	block.add(b);
+        }
+        
+        File createBlockFile = new File(dataDir + "balance" + i + ".json");
+        //System.out.println(createBlockFile.getName());
+        createBlockFile.delete();
+        if(!createBlockFile.exists()){
+            try{
+                if(createBlockFile.createNewFile()){
+                    System.out.println("New block created, blockid:" + Integer.toString(blockId));
+                }
+            } catch (IOException e){
+                e.printStackTrace();
+                System.out.println("Creating block failed, blockid:" + Integer.toString(blockId));
+            }
+        }
+        // write new block
+        try(FileWriter file = new FileWriter(dataDir + "balance" + i + ".json")){
+            file.write(block.toString());
+            file.flush();
+        } catch(IOException e){
+            //e.printStackTrace();
+            System.out.println("Fail to write block: " + dataDir + Hash.getHashString(block.toString()) + ".json");
+        }
+    }
 
     // new block
     public void processNewBlock(JsonObject block){
@@ -525,6 +562,7 @@ public class DatabaseEngine {
         balances_block = compute_balance(block);
         balances = balances_block;
         output_block(block);
+        print_balance_block(blockId);
         blockId++;
     }
 
