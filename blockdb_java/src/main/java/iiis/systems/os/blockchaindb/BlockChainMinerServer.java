@@ -146,7 +146,7 @@ public class BlockChainMinerServer {
                     computer.clearBlock();
                     computer.setFinished(false);
                 } else {
-                    if(!dbEngine.computing && dbEngine.getTransSize() > 5){
+                    if(!dbEngine.computing && dbEngine.getTransSize() > 0){
                         computer.setBlock(dbEngine.raw_block());
                         computer.notify();
                     }    

@@ -3,11 +3,14 @@ package iiis.systems.os.blockchaindb;
 import java.io.FileWriter;
 import java.io.File;
 import java.io.FileReader;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map.Entry;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.PriorityQueue;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
@@ -90,6 +93,7 @@ public class DatabaseEngine {
     private int blockId = 1;
     private volatile JsonArray TxPool_new = new JsonArray();
     private volatile JsonArray TxPool_used = new JsonArray();
+
     private File logFile = new File(dataDir + "log.json");
     public volatile boolean newBlock = false;
     public volatile boolean computing = false;
@@ -97,6 +101,8 @@ public class DatabaseEngine {
     public volatile boolean getBlock = false;
     public HashMap<String, String> remoteBlocks = new HashMap<>();
     public String getBlockHash;
+
+    
 
     DatabaseEngine(String dataDir) {
         this.dataDir = dataDir;
@@ -125,8 +131,12 @@ public class DatabaseEngine {
     }
 
     public String getBlock(String hash){
-    	String response = null;
-    	response = blocks.get(hash).toString();
+        String response = null;
+        if(blocks.containsKey(hash)){
+            response = blocks.get(hash).toString();
+        } else {
+            response = (new JsonObject()).toString();
+        }
     	return response;
     }
 
@@ -140,6 +150,7 @@ public class DatabaseEngine {
         return;
     }
 
+    // mining fee should not be removed from fromBalance!! Mining creates money
     public void pushTransaction(String fromId, String toId, int value, int miningFee, String UUID){
     	int fromBalance = getOrInit(fromId, balances);
     	int toBalance = getOrInit(toId, balances);
@@ -181,11 +192,11 @@ public class DatabaseEngine {
             // nothing happens here
         }
         getBlock = false;
-        return remoteBlocks.get(hash);
-    }
-
-    public void recover(String block){
-
+        if(remoteBlocks.containsKey(hash))
+            return remoteBlocks.get(hash);
+        else{
+            return "notfound";
+        }
     }
 
     //get new transaction pool size
@@ -514,6 +525,80 @@ public class DatabaseEngine {
     }
 
     //local calls end
+
+    //recover
+
+    public String fileReadBlock(String path) throws IOException, FileNotFoundException{
+        FileInputStream in = new FileInputStream(new File(path));
+        int size = in.available();
+        byte[] buffer = new byte[size];
+        in.read(buffer);
+        in.close();
+        String block = new String(buffer);
+        return block;
+    }
+        
+    public void recover(String block){
+        JsonParser parser = new JsonParser();
+        JsonObject blockObject = (JsonObject) parser.parse(block);
+        HashSet<String> recoveredChain = new HashSet<String>();
+
+        //on an unknown chain
+        //blocks.put(Hash.getHashString(block), blockObject);
+        recoveredChain.add(block);
+        String prevHash = blockObject.get("PrevHash").getAsString();
+        int branchLength = 1;
+
+        System.out.println("Starting to recover, from block:" + Hash.getHashString(block));
+
+        while (!prevHash.equals("0000000000000000000000000000000000000000000000000000000000000000")){
+            String path = dataDir + prevHash + ".json";
+            String prevBlock = new String();
+            try{
+                prevBlock = fileReadBlock(path);
+            } catch (FileNotFoundException e){
+                System.err.println("Local file not found, path:" + path);
+                int trycounter = 0;
+                while(trycounter < 1000){ //in 1000 loops, try find remote target
+                    prevBlock = getRemoteBlock(prevHash);
+                    if(!prevBlock.equals("notfound")){
+                        break;
+                    }
+                    trycounter ++;
+                }
+                if(trycounter == 1000){
+                    return;
+                } 
+            } catch (IOException e){
+            }
+
+            System.out.println("Block recovered:" + prevHash);
+
+            prevHash = ((JsonObject) parser.parse(prevBlock)).get("PrevHash").getAsString();
+            if(recoveredChain.contains(prevBlock)){
+                return;
+            } else {
+                recoveredChain.add(prevBlock);
+            }
+            branchLength += 1;
+        }
+
+        if(branchLength >= getLongestBranch().length){
+            System.out.println("Successfully recovered chain, length = " + Integer.toString(branchLength) 
+                                                                            + ", lastblock hash = " + Hash.getHashString(block));
+            BlockChain.add(new branch(branchLength, blockObject));
+
+            for(String b: recoveredChain){
+                JsonObject bObj = (JsonObject) parser.parse(b);
+                blocks.put(Hash.getHashString(b), bObj);
+                output_block(bObj);
+            }
+
+            balances_block = compute_balance(blockObject);
+            balances = balances_block;
+            blockId = branchLength;
+        }
+    }
     
     //compute
     public String intToHex(int i){ // i < 128 here
