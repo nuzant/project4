@@ -95,17 +95,20 @@ public class BlockChainMinerClient extends Thread{
     }
 
     public void getBlock(String hash){
-        System.out.println("Getting block from: " + host + ":" + Integer.toString(port));
 
         GetBlockRequest request = GetBlockRequest.newBuilder().setBlockHash(hash).build();
         StreamObserver<JsonBlockString> observer = new StreamObserver<JsonBlockString>(){
             //stream observer used to receive new block from other servers
             @Override
             public void onNext(JsonBlockString json){
-                String b = json.getJson();
-                blocksReceived.add(b);
-                notice = true;
-
+                if(json != null){
+                    String b = json.getJson();
+                    blocksReceived.add(b);
+                    notice = true;
+                    System.out.println("Getting block from: " + host + ":" + Integer.toString(port) + ", hash = " + Hash.getHashString(b));
+                } else {
+                    System.out.println("Getting block from: " + host + ":" + Integer.toString(port) + ", get NOTHING!");
+                }
                 return;
             }
 

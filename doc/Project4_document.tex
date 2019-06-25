@@ -1,0 +1,48 @@
+\documentclass{article}
+\usepackage{listings}
+\usepackage{verbatim}
+\usepackage{color}
+\usepackage{xcolor}
+\definecolor{dkgreen}{rgb}{0,0.6,0}
+\definecolor{gray}{rgb}{0.5,0.5,0.5}
+\definecolor{mauve}{rgb}{0.58,0,0.82}
+\lstset{frame=tb, language=Java, aboveskip=3mm, belowskip=3mm, showstringspaces=false, columns=flexible, basicstyle = \ttfamily\small, numbers=none, numberstyle=\tiny\color{gray}, keywordstyle=\color{blue}, commentstyle=\color{dkgreen}, stringstyle=\color{mauve}, breaklines=true, breakatwhitespace=true, tabsize=3 }
+\title{Project 4}
+\author{Zhiyu Mei, Yuxin Qin, Boshi Tang}
+\begin{document}
+\maketitle
+
+\section{Multiple threads}
+Normally the server runs multiple threads at the same time. There are 3 kinds of threads implemented,
+
+\subsection{Client thread}
+In \texttt{class BlockChainMinerClient}, this kind of threads takes charge of building channels, talking to other servers, boardcasting and get data from other servers.
+
+\subsection{Computing thread}
+In \texttt{class Computer}, there are only 1 computing thread, run method \texttt{compute\_nonce()}.
+
+\subsection{Server thread}
+The server thread is the main thread. Validating and storing the blocks into memory, and output logs. At the same time, notify client threads and computing thread at proper time.
+
+\section{Data Structure}
+The server uses a \texttt{HashMap} to store all the blocks it retrived, using the hash string of the block as the keys. Moreover, it preserves block chain tree data structure, by storing 
+all of the block chain tails in a priority queue, which sort the chain tails with the length of the chains (if the length is the same, sort with hash value.) 
+The blocks form a chain, with PrevHash values as pointers pointing to the previous block of the chain. We can easily maintain the longest chain by calling 
+\texttt{peek()} of the priority queue, and complete the chain along the pointers.
+
+\section{Restore}
+New blocks are stored after validation. If validation fails, either the blocks is not legit by hash, transactions, or the server can not find the previous block in his memory. 
+When the latter situation occurs, the server should try to restore the chain by asking other servers about the previous blocks of this block. 
+If the chain of this block can not be retrived completely, or forms a cycle, discard the block immidiately.
+
+\section{Test Cases and Start Script}
+A simple test case is presented in \texttt{test.sh}. It starts 3 servers, pushing 100 transactions to one of them.
+
+Another more complex test case is that 1 server startup 100 seconds later than the other 2 servers, and tries to recover the blocks from others. The scripts are 
+\texttt{test\_recover.sh} and \texttt{client\_start.sh}.
+
+Another test case about balance is \texttt{test\_run.sh} provided by example.
+
+
+
+\end{document}

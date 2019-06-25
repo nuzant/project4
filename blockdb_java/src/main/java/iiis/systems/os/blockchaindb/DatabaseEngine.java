@@ -47,12 +47,10 @@ public class DatabaseEngine {
     	public int compareTo(branch another) {
     		String hash1 = Hash.getHashString(this.last_block.toString());
     		String hash2 = Hash.getHashString(another.last_block.toString());
-    		int h1 = Integer.parseInt(hash1, 16);
-    		int h2 = Integer.parseInt(hash2, 16);
     		if (another.length != this.length)
     		    return another.length - this.length;
     		else
-    			return h1-h2;
+    			return hash1.compareTo(hash2);
         }
     }
 
@@ -97,8 +95,8 @@ public class DatabaseEngine {
     private File logFile = new File(dataDir + "log.json");
     public volatile boolean newBlock = false;
     public volatile boolean computing = false;
-
     public volatile boolean getBlock = false;
+    public volatile boolean recovering = false;
     public HashMap<String, String> remoteBlocks = new HashMap<>();
     public String getBlockHash;
 
@@ -134,8 +132,6 @@ public class DatabaseEngine {
         String response = null;
         if(blocks.containsKey(hash)){
             response = blocks.get(hash).toString();
-        } else {
-            response = (new JsonObject()).toString();
         }
     	return response;
     }
@@ -150,14 +146,13 @@ public class DatabaseEngine {
         return;
     }
 
-    // mining fee should not be removed from fromBalance!! Mining creates money
     public void pushTransaction(String fromId, String toId, int value, int miningFee, String UUID){
     	int fromBalance = getOrInit(fromId, balances);
     	int toBalance = getOrInit(toId, balances);
     	if (fromBalance > value) {
     		AddTx(fromId, toId, value, miningFee, UUID);
     		balances.put(fromId, fromBalance - value);
-            balances.put(toId, toBalance + value);
+            balances.put(toId, toBalance + value - miningFee);
     	}
         return;
     }
@@ -311,7 +306,7 @@ public class DatabaseEngine {
         }
         
         balance.put(fromId, fromBalance - value);
-        balance.put(toId, toBalance + value);
+        balance.put(toId, toBalance + value - miningFee);
         return true;
     }
 
@@ -401,7 +396,12 @@ public class DatabaseEngine {
     	while (!prevHash.equals(initHash)) {
             JsonObject now = blocks.get(prevHash);
             s.push(now);
-    		prevHash = now.get("PrevHash").getAsString();
+            try{
+                prevHash = now.get("PrevHash").getAsString();
+            } catch (NullPointerException e){
+                System.out.println("Null pointer in compute_balance(), prevHash:" + prevHash);
+                break;
+            }
     	}
     	
     	while(!s.empty()) {
@@ -493,9 +493,17 @@ public class DatabaseEngine {
 
     // new block
     public void processNewBlock(JsonObject block){
+        if(this.recovering) return;
+
         if(!checkHash(block.toString())){
             System.out.println("Reject hash: " + Hash.getHashString(block.toString()) + "for chechhash");
             return;
+        }
+
+        if(!checkPreviousBlock(block)){
+            if(!recover(block.toString())){
+                return;
+            }
         }
 
         if(!checkNewTrans(block)){
@@ -503,13 +511,9 @@ public class DatabaseEngine {
             return;
         }
 
-        if(!checkPreviousBlock(block)){
-            recover(block.toString());
-        } else {
-            putBlock(block);
-            extendBranch(block);
-            updateTransPool(block);
-        }
+        putBlock(block);
+        extendBranch(block);
+        updateTransPool(block);
 
         if(!checkLegitTrans(block)){
             deleteBlock(block);
@@ -538,7 +542,8 @@ public class DatabaseEngine {
         return block;
     }
         
-    public void recover(String block){
+    public boolean recover(String block){
+        this.recovering = true;
         JsonParser parser = new JsonParser();
         JsonObject blockObject = (JsonObject) parser.parse(block);
         HashSet<String> recoveredChain = new HashSet<String>();
@@ -558,32 +563,39 @@ public class DatabaseEngine {
                 prevBlock = fileReadBlock(path);
             } catch (FileNotFoundException e){
                 System.err.println("Local file not found, path:" + path);
-                int trycounter = 0;
-                while(trycounter < 1000){ //in 1000 loops, try find remote target
+                long nowtime = System.currentTimeMillis();
+                //boolean fail = true;
+                while(true){ // try find remote target
                     prevBlock = getRemoteBlock(prevHash);
                     if(!prevBlock.equals("notfound")){
                         break;
                     }
-                    trycounter ++;
                 }
-                if(trycounter == 1000){
-                    return;
-                } 
             } catch (IOException e){
             }
 
             System.out.println("Block recovered:" + prevHash);
-
-            prevHash = ((JsonObject) parser.parse(prevBlock)).get("PrevHash").getAsString();
+            
+            try{
+                prevHash = ((JsonObject) parser.parse(prevBlock)).get("PrevHash").getAsString();
+            } catch (NullPointerException e){
+                System.err.println("Null pointer caused by:" + prevBlock + ", recover stopped.");
+                this.recovering = false;
+                return false;
+            }
             if(recoveredChain.contains(prevBlock)){
-                return;
+                this.recovering = false;
+                return false;
             } else {
                 recoveredChain.add(prevBlock);
             }
             branchLength += 1;
         }
 
-        if(branchLength >= getLongestBranch().length){
+        int oldLength = 0;
+        if(!BlockChain.isEmpty()) oldLength = getLongestBranch().length;
+
+        if(branchLength >= oldLength){
             System.out.println("Successfully recovered chain, length = " + Integer.toString(branchLength) 
                                                                             + ", lastblock hash = " + Hash.getHashString(block));
             BlockChain.add(new branch(branchLength, blockObject));
@@ -597,7 +609,14 @@ public class DatabaseEngine {
             balances_block = compute_balance(blockObject);
             balances = balances_block;
             blockId = branchLength;
+
+            this.recovering = false;
+            return true;
         }
+
+        System.out.print("Recover discard, not enough length.");
+        this.recovering = false;
+        return false;
     }
     
     //compute
@@ -632,7 +651,7 @@ public class DatabaseEngine {
                                             System.out.println("compute_nonce(): Compute completed. Hash = " + Hash.getHashString(block.toString()));
                                             return block;
                                         }
-                                        if(newBlock){
+                                        if(newBlock || recovering){
                                             break jumpOut;
                                         }
                                     }

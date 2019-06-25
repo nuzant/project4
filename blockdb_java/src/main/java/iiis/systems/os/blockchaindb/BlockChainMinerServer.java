@@ -54,21 +54,25 @@ public class BlockChainMinerServer {
     static private int initialize(String[] args) throws IOException{
         int serverid = 0;
 
-        if(args.length == 2){
-            if(args[0].compareTo("--id") == 0){
+        if(args.length == 1){
+            if(args[0].startsWith("--id=")){
                 try{
-                    serverid = Integer.parseInt(args[1]);
+                    for(String arg: args[0].split("=")){
+                        if(!arg.equals("--id")){
+                            serverid = Integer.parseInt(arg);
+                        }
+                    }
                     //return serverid;
                 } catch (NumberFormatException e){
                     System.err.println("Server id should be an integer.");
                     System.exit(1);
                 }
             } else {
-                System.err.println("Missing argument, \"--id [server id]\" 01");
+                System.err.println("Missing argument, \"--id=[server id]\" 01");
                 System.exit(1);
             }
         } else {
-            System.err.println("Missing argument, \"--id [server id]\" 02");
+            System.err.println("Missing argument, \"--id=[server id]\" 02");
             System.exit(1);
         }
 
@@ -146,7 +150,7 @@ public class BlockChainMinerServer {
                     computer.clearBlock();
                     computer.setFinished(false);
                 } else {
-                    if(!dbEngine.computing && dbEngine.getTransSize() > 0){
+                    if(!dbEngine.computing && dbEngine.getTransSize() > 0 && !dbEngine.recovering){
                         computer.setBlock(dbEngine.raw_block());
                         computer.notify();
                     }    
@@ -164,8 +168,9 @@ public class BlockChainMinerServer {
                     if(client.notice){
                         for(String block: client.blocksReceived){
                             dbEngine.remoteBlocks.put(hash, block);
-                            client.blocksReceived.remove(block);
                         }
+
+                        client.blocksReceived.clear();
 
                         synchronized(dbEngine){
                             dbEngine.notify();
@@ -233,7 +238,10 @@ public class BlockChainMinerServer {
         @Override
         public void getBlock(GetBlockRequest request, StreamObserver<JsonBlockString> responseObserver){
             String json = dbEngine.getBlock(request.getBlockHash());
-            JsonBlockString response = JsonBlockString.newBuilder().setJson(json).build();
+            JsonBlockString response = null;
+            if(json != null){
+                response = JsonBlockString.newBuilder().setJson(json).build();
+            }
             responseObserver.onNext(response);
             responseObserver.onCompleted();
         }
